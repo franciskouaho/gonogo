@@ -7,7 +7,7 @@ from docx import Document
 from docx.shared import Pt
 from dotenv import load_dotenv
 from openai import OpenAI
-from backend.s3_config import put_object, get_s3_client, get_object
+from backend.s3_config import put_object
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
