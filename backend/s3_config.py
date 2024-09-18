@@ -16,8 +16,8 @@ custom_config = Config(
 def get_s3_client():
     return boto3.client('s3',
                         endpoint_url='http://minio:9000',
-                        aws_access_key_id='Yx2BzNTI2epUtXFsxTFl',
-                        aws_secret_access_key='N1xjHTHMWTBN9TpZnkjfkY94goZfWlMZvG9FMz4l',
+                        aws_access_key_id='cRyj3AP81BxrHzn4F1ZJ',
+                        aws_secret_access_key='Yt7hmfloOwcCIWPlaKbGbajpGGU52Asd34sWLs24',
                         region_name='us-east-1',
                         config=boto3.session.Config(signature_version='s3v4'))
 
