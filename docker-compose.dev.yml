@@ -1,6 +1,23 @@
 version: '3.8'
 
 services:
+  traefik:
+    image: traefik:v2.5
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.traefik.address=:8080"
+      - "--log.level=DEBUG"
+      - "--accesslog=true"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - jobpilot_network
+
   backend:
     build:
       context: ./backend
@@ -14,7 +31,7 @@ services:
       - .:/backend
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.emplica.fr`)"
+      - "traefik.http.routers.backend.rule=Host(`localhost`)"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
     networks:
       - jobpilot_network
@@ -33,7 +50,7 @@ services:
       - "3000:3000"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`emplica.fr`)"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`)"
     networks:
       - jobpilot_network
 
