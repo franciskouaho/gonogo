@@ -3,6 +3,7 @@ import logging
 import os
 import time
 
+from botocore.exceptions import NoCredentialsError
 from docx import Document
 from docx.shared import Pt
 from dotenv import load_dotenv
@@ -160,32 +161,26 @@ def create_word_document(chatgpt_analysis, file_path):
     try:
         doc = Document()
 
-        # Fonction pour ajouter un titre
         def add_heading(text, level):
             heading = doc.add_heading(text, level=level)
-            heading.style.font.size = Pt(14 - level)  # Ajuster la taille en fonction du niveau
+            heading.style.font.size = Pt(14 - level)
 
-        # Fonction pour ajouter un paragraphe
         def add_paragraph(text):
             p = doc.add_paragraph(text)
             p.style.font.size = Pt(11)
 
-        # Fonction pour ajouter une liste
         def add_list(items):
             for item in items:
                 p = doc.add_paragraph(item, style='List Bullet')
                 p.style.font.size = Pt(11)
 
-        # Titre principal
         add_heading("Analyse ChatGPT", 0)
 
-        # Informations générales
         add_heading("Informations générales", 1)
         for key, value in chatgpt_analysis.items():
             if isinstance(value, str):
                 add_paragraph(f"{key}: {value}")
 
-        # Calendrier
         add_heading("Calendrier", 1)
         for key, value in chatgpt_analysis['Calendrier'].items():
             if isinstance(value, str):
@@ -194,14 +189,12 @@ def create_word_document(chatgpt_analysis, file_path):
                 add_paragraph(f"{key}:")
                 add_list(value)
 
-        # Critères d'attribution
         add_heading("Critères d'attribution", 1)
         if chatgpt_analysis["Critères d'attribution"]:
             add_list(chatgpt_analysis["Critères d'attribution"])
         else:
             add_paragraph("Aucun critère d'attribution n'est spécifié.")
 
-        # Description de l'offre
         add_heading("Description de l'offre", 1)
         for key, value in chatgpt_analysis["Description de l'offre"].items():
             if isinstance(value, str):
@@ -210,28 +203,24 @@ def create_word_document(chatgpt_analysis, file_path):
                 add_paragraph(f"{key}:")
                 add_list(value)
 
-        # Description des prestations
         add_heading("Description des prestations", 1)
         if chatgpt_analysis["Description des prestations"]:
             add_list(chatgpt_analysis["Description des prestations"])
         else:
             add_paragraph("Aucune description des prestations n'est disponible.")
 
-        # Exigences
         add_heading("Exigences", 1)
         if chatgpt_analysis["Exigences"]:
             add_list(chatgpt_analysis["Exigences"])
         else:
             add_paragraph("Aucune exigence n'est spécifiée.")
 
-        # Missions et compétences attendues
         add_heading("Missions et compétences attendues", 1)
         if chatgpt_analysis["Missions et compétences attendues"]:
             add_list(chatgpt_analysis["Missions et compétences attendues"])
         else:
             add_paragraph("Aucune mission ou compétence attendue n'est spécifiée.")
 
-        # Profil des hôtes ou hôtesses d'accueil
         add_heading("Profil des hôtes ou hôtesses d'accueil", 1)
         for key, value in chatgpt_analysis["Profil des hôtes ou hôtesses d'accueil"].items():
             add_paragraph(f"{key}:")
@@ -240,7 +229,6 @@ def create_word_document(chatgpt_analysis, file_path):
             else:
                 add_paragraph("Aucune information disponible.")
 
-        # Plages horaires
         add_heading("Plages horaires", 1)
         if chatgpt_analysis["Plages horaires"]:
             headers = ["Horaires", "Jour", "Accueil physique", "Accueil téléphonique", "Gestion colis *", "Gestion courrier", "Bilingue", "Campus"]
@@ -256,18 +244,15 @@ def create_word_document(chatgpt_analysis, file_path):
         else:
             add_paragraph("Aucune information sur les plages horaires n'est disponible.")
 
-        # PSE
         add_heading("PSE", 1)
         add_paragraph(chatgpt_analysis["PSE"] if chatgpt_analysis["PSE"] else "Aucune information PSE disponible.")
 
-        # Formations
         add_heading("Formations", 1)
         if chatgpt_analysis["Formations"]:
             add_list(chatgpt_analysis["Formations"])
         else:
             add_paragraph("Aucune information sur les formations n'est disponible.")
 
-        # Intérêt pour le groupe
         add_heading("Intérêt pour le groupe", 1)
         for key, value in chatgpt_analysis["Intérêt pour le groupe"].items():
             add_paragraph(f"{key}:")
@@ -276,11 +261,9 @@ def create_word_document(chatgpt_analysis, file_path):
             else:
                 add_paragraph("Aucune information disponible.")
 
-        # Formule de révision des prix
         add_heading("Formule de révision des prix", 1)
         add_paragraph(chatgpt_analysis["Formule de révision des prix"] if chatgpt_analysis["Formule de révision des prix"] else "Aucune formule de révision des prix spécifiée.")
 
-        # Sauvegarde du document
         doc.save(file_path)
         logger.info(f"Document Word créé avec succès : {file_path}")
     except Exception as e:
@@ -294,7 +277,6 @@ def process_gonogo_file(results):
         chatgpt_analysis = get_chatgpt_response(results)
         logger.info("Analyse ChatGPT obtenue")
 
-        # Parser la réponse JSON
         structured_analysis = json.loads(chatgpt_analysis)
 
         fine_tuning_data = prepare_fine_tuning_data(results)
@@ -320,11 +302,9 @@ def process_gonogo_file(results):
 
         status = client.fine_tuning.jobs.retrieve(fine_tune_id).status
 
-        # Création du document Word
         word_file_path = 'chatgpt_analysis.docx'
         create_word_document(structured_analysis, word_file_path)
 
-        # Upload du fichier Word vers MinIO
         if upload_to_s3(word_file_path, f"documents/{word_file_path}"):
             logger.info(f"Document Word uploadé vers MinIO : documents/{word_file_path}")
         else:
@@ -347,7 +327,6 @@ def process_gonogo_file(results):
         if 'jsonl_filename' in locals() and os.path.exists(jsonl_filename):
             os.remove(jsonl_filename)
             logger.info(f"Fichier temporaire {jsonl_filename} supprimé")
-        # Nettoyage des fichiers temporaires
         if os.path.exists(word_file_path):
             os.remove(word_file_path)
             logger.info(f"Fichier temporaire {word_file_path} supprimé")
