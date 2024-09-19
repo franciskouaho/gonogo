@@ -9,8 +9,6 @@ RUN yarn install
 
 COPY . .
 
-COPY public ./public
-
 RUN yarn build
 
 # Étape de production
