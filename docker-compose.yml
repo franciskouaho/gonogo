@@ -18,13 +18,11 @@ services:
       - traefik_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gonogo-backend.rule=Host(`api.emplica.fr`)"
-      - "traefik.http.services.gonogo-backend.loadbalancer.server.port=8000"
-      - "traefik.http.routers.gonogo-backend.entrypoints=websecure"
-      - "traefik.http.routers.gonogo-backend.tls=true"
-      - "traefik.http.routers.gonogo-backend.tls.certresolver=myresolver"
-      - "traefik.http.routers.gonogo-backend-http.entrypoints=web"
-      - "traefik.http.routers.gonogo-backend-http.middlewares=https-redirect"
+      - "traefik.http.routers.backend.rule=Host(`api.emplica.fr`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certresolver=backend_resolver"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
 
   frontend:
     build:
@@ -37,14 +35,12 @@ services:
       - traefik_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gonogo-frontend.rule=Host(`emplica.fr`)"
-      - "traefik.http.services.gonogo-frontend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.gonogo-frontend.entrypoints=websecure"
-      - "traefik.http.routers.gonogo-frontend.tls=true"
-      - "traefik.http.routers.gonogo-frontend.tls.certresolver=myresolver"
-      - "traefik.http.routers.gonogo-frontend-http.entrypoints=web"
-      - "traefik.http.routers.gonogo-frontend-http.middlewares=https-redirect"
-      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.frontend.rule=Host(`emplica.fr`)"
+      - "traefik.http.routers.frontend.entrypoints=internal"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certresolver=frontend_resolver"
 
 
   minio:
@@ -62,13 +58,10 @@ services:
       - traefik_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gonogo-minio.rule=Host(`minio.emplica.fr`)"
-      - "traefik.http.services.gonogo-minio.loadbalancer.server.port=9000"
-      - "traefik.http.routers.gonogo-minio.entrypoints=websecure"
-      - "traefik.http.routers.gonogo-minio.tls=true"
-      - "traefik.http.routers.gonogo-minio.tls.certresolver=myresolver"
-      - "traefik.http.routers.gonogo-minio-http.entrypoints=web"
-      - "traefik.http.routers.gonogo-minio-http.middlewares=https-redirect"
+      - "traefik.http.routers.minio.rule=Host(`minio.emplica.fr`)"
+      - "traefik.http.routers.minio.entrypoints=websecure"
+      - "traefik.http.routers.minio.tls=true"
+      - "traefik.http.routers.minio.tls.certresolver=minio_resolver"
 
 
 networks:
