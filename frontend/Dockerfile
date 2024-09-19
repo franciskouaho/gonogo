@@ -19,10 +19,8 @@ WORKDIR /usr/src/app
 COPY --from=builder /usr/src/app/package.json /usr/src/app/yarn.lock ./
 COPY --from=builder /usr/src/app/.next ./.next
 COPY --from=builder /usr/src/app/public ./public
-
-RUN yarn install --production
-
-EXPOSE 3000
+COPY --from=builder /usr/src/app/node_modules ./node_modules
 
 ENV NODE_ENV=production
+
 CMD ["yarn", "start"]
