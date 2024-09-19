@@ -29,17 +29,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: frontend
-    volumes:
-      - ./frontend:/usr/src/app
-      - /usr/src/app/node_modules
-      - /usr/src/app/.next
-      - /usr/src/app/.next/cache
     ports:
       - "3000:3000"
     networks:
       - traefik_network
     environment:
-    - NODE_ENV=production
+      - NODE_ENV=production
+    command: yarn start
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.gonogo-frontend.rule=Host(`emplica.fr`)"
