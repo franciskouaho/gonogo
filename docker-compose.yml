@@ -23,6 +23,8 @@ services:
       - "traefik.http.routers.gonogo-backend.entrypoints=websecure"
       - "traefik.http.routers.gonogo-backend.tls=true"
       - "traefik.http.routers.gonogo-backend.tls.certresolver=myresolver"
+      - "traefik.http.routers.gonogo-backend-http.entrypoints=web"
+      - "traefik.http.routers.gonogo-backend-http.middlewares=https-redirect"
 
   frontend:
     build:
@@ -40,6 +42,9 @@ services:
       - "traefik.http.routers.gonogo-frontend.entrypoints=websecure"
       - "traefik.http.routers.gonogo-frontend.tls=true"
       - "traefik.http.routers.gonogo-frontend.tls.certresolver=myresolver"
+      - "traefik.http.routers.gonogo-frontend-http.entrypoints=web"
+      - "traefik.http.routers.gonogo-frontend-http.middlewares=https-redirect"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
 
 
   minio:
@@ -62,6 +67,8 @@ services:
       - "traefik.http.routers.gonogo-minio.entrypoints=websecure"
       - "traefik.http.routers.gonogo-minio.tls=true"
       - "traefik.http.routers.gonogo-minio.tls.certresolver=myresolver"
+      - "traefik.http.routers.gonogo-minio-http.entrypoints=web"
+      - "traefik.http.routers.gonogo-minio-http.middlewares=https-redirect"
 
 
 networks:
