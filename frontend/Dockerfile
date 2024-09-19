@@ -20,7 +20,7 @@ COPY --from=builder /usr/src/app/package.json /usr/src/app/yarn.lock ./
 COPY --from=builder /usr/src/app/.next ./.next
 COPY --from=builder /usr/src/app/public ./public
 
-RUN yarn install --production --frozen-lockfile
+RUN yarn install --production
 
 EXPOSE 3000
 
