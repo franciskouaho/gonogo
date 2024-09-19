@@ -15,11 +15,12 @@ custom_config = Config(
 
 def get_s3_client():
     return boto3.client('s3',
-                        endpoint_url='http://minio:9000',
-                        aws_access_key_id='cRyj3AP81BxrHzn4F1ZJ',
-                        aws_secret_access_key='Yt7hmfloOwcCIWPlaKbGbajpGGU52Asd34sWLs24',
-                        region_name='us-east-1',
-                        config=boto3.session.Config(signature_version='s3v4'))
+                        endpoint_url=os.getenv('MINIO_ENDPOINT_URL'),
+                        aws_access_key_id=os.getenv('MINIO_ACCESS_KEY_ID'),
+                        aws_secret_access_key=os.getenv('MINIO_SECRET_ACCESS_KEY'),
+                        region_name=os.getenv('MINIO_REGION_NAME'),
+                        config=boto3.session.Config(signature_version='s3v4')
+                        )
 
 def put_json_object(bucket_name, object_name, data):
     s3_client = get_s3_client()

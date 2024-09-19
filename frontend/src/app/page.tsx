@@ -3,6 +3,7 @@
 import { ChangeEvent, FunctionComponent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import api from "@/config/api";
+import axios from 'axios';
 
 interface ChatGPTAnalysis {
     BU: string;
@@ -65,6 +66,7 @@ const Home: FunctionComponent = () => {
     const [results, setResults] = useState<ApiResponse | null>(null);
     const [chatGPTResponse, setChatGPTResponse] = useState<ChatGPTAnalysis | null>(null);
     const [showDownloadButton, setShowDownloadButton] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const handleFileUpload = useMutation<ApiResponse, Error, void>({
         mutationFn: () => {
@@ -93,6 +95,34 @@ const Home: FunctionComponent = () => {
         if (event.target.files && event.target.files[0]) {
             setFile(event.target.files[0]);
             handleFileUpload.mutate();
+        }
+    };
+
+    const handleDownload = async () => {
+        if (!results || !results.word_document) return;
+        
+        setIsDownloading(true);
+        try {
+            const response = await api.get(`download-document`, {
+                params: { file_path: results.word_document },
+                responseType: 'blob'
+            });
+
+            const blob = new Blob([response.data], {
+                type: response.headers['content-type']
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = results.word_document.split('/').pop() || 'document';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Erreur lors du téléchargement:", error);
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -141,10 +171,11 @@ const Home: FunctionComponent = () => {
 
             {showDownloadButton && results && results.word_document && (
                 <button
-                    onClick={() => {/* Logique de téléchargement */}}
+                    onClick={handleDownload}
+                    disabled={isDownloading}
                     className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
                 >
-                    Télécharger l'analyse
+                    {isDownloading ? 'Téléchargement en cours...' : 'Télécharger l\'analyse'}
                 </button>
             )}
 

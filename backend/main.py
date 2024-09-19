@@ -4,15 +4,14 @@ import os
 import zipfile
 import shutil
 import json
-
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from backend.s3_config import put_object, get_s3_client, get_object
 from backend.process_gonogo_file import process_gonogo_file
 from backend.pdf_to_json import pdf_to_json
 from backend.xlsx_to_json import xlsx_to_json
 from backend.docx_to_json import docx_to_json
-from backend.process_gonogo_file import process_gonogo_file
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +58,37 @@ async def match(zip_file: UploadFile = File(...)):
     except Exception as e:
         logger.exception(f"Erreur lors du traitement : {str(e)}")
         return {"error": str(e)}, 500
+
+@app.get("/download-document")
+async def download_document(file_path: str):
+    logger.info(f"Demande de téléchargement pour le fichier : {file_path}")
+    s3_bucket = "jobpilot"
+    
+    try:
+        # Récupérer le fichier depuis S3/Minio
+        s3_client = get_s3_client()
+        response = s3_client.get_object(Bucket=s3_bucket, Key=file_path)
+        
+        # Déterminer le type MIME en fonction de l'extension du fichier
+        file_extension = os.path.splitext(file_path)[1].lower()
+        if file_extension == '.docx':
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif file_extension == '.pdf':
+            media_type = "application/pdf"
+        else:
+            media_type = "application/octet-stream"
+        
+        # Utiliser StreamingResponse pour renvoyer le fichier
+        return StreamingResponse(
+            response['Body'].iter_chunks(),
+            media_type=media_type,
+            headers={
+                'Content-Disposition': f'attachment; filename="{os.path.basename(file_path)}"'
+            }
+        )
+    except Exception as e:
+        logger.exception(f"Erreur lors du téléchargement du fichier : {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du téléchargement : {str(e)}")
 
 def process_zip_from_s3(bucket, key):
     s3_client = get_s3_client()
