@@ -12,6 +12,8 @@ services:
       - minio
     volumes:
       - .:/backend
+    env_file:
+      - .env
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`api.emplica.fr`)"

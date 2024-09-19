@@ -3,6 +3,7 @@ from botocore.config import Config
 import json
 import io
 import logging
+import os
 from botocore.exceptions import ClientError
 
 custom_config = Config(
