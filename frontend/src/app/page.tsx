@@ -67,10 +67,12 @@ const Home: FunctionComponent = () => {
     const [chatGPTResponse, setChatGPTResponse] = useState<ChatGPTAnalysis | null>(null);
     const [showDownloadButton, setShowDownloadButton] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleFileUpload = useMutation<ApiResponse, Error, void>({
         mutationFn: () => {
             if (!file) throw new Error("Aucun fichier sélectionné");
+            setIsLoading(true);
             const formData = new FormData();
             formData.append('zip_file', file);
             return api.post<ApiResponse>('read-file', formData, {
@@ -84,10 +86,12 @@ const Home: FunctionComponent = () => {
             setResults(data);
             setChatGPTResponse(data.chatgpt_analysis);
             setShowDownloadButton(true);
+            setIsLoading(false);
         },
         onError: (error) => {
             console.error("Erreur lors du téléchargement:", error);
             setShowDownloadButton(false);
+            setIsLoading(false);
         }
     });
 
@@ -160,7 +164,12 @@ const Home: FunctionComponent = () => {
             </form>
 
             <div className="mt-4">
-                {handleFileUpload.isLoading && <p>Traitement du fichier en cours...</p>}
+                {isLoading && (
+                    <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                        <p className="ml-2">Traitement du fichier en cours...</p>
+                    </div>
+                )}
                 {handleFileUpload.isError && (
                     <p className="text-red-500 mt-2">
                         Erreur lors du traitement du fichier. Veuillez réessayer.
