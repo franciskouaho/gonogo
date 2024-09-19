@@ -20,6 +20,7 @@ app = FastAPI()
 
 origins = [
     "http://localhost:3000",
+    "https://emplica.fr",
 ]
 
 app.add_middleware(
