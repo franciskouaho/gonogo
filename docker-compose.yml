@@ -2,70 +2,43 @@ version: '3.7'
 
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: backend
-    ports:
-      - "8000:8000"
-    depends_on:
-      - minio
-    volumes:
-      - .:/backend
+    image: gonogo-backend
+    networks:
+      - traefik_network
     env_file:
       - .env
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.emplica-backend.rule=Host(`api.emplica.fr`)"
-      - "traefik.http.services.emplica-backend.loadbalancer.server.port=8000"
-      - "traefik.http.routers.emplica-backend.entrypoints=websecure"
-      - "traefik.http.routers.emplica-backend.tls=true"
-      - "traefik.http.routers.emplica-backend.tls.certresolver=myresolver"
-    networks:
-      - traefik_network
+      - "traefik.http.routers.gonogo-backend.rule=Host(`api.emplica.fr`)"
+      - "traefik.http.services.gonogo-backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.gonogo-backend.entrypoints=websecure"
+      - "traefik.http.routers.gonogo-backend.tls=true"
+      - "traefik.http.routers.gonogo-backend.tls.certresolver=myresolver"
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: frontend
-    volumes:
-      - ./frontend:/usr/src/app
-      - /usr/src/app/node_modules
-      - /usr/src/app/.next
-      - /usr/src/app/.next/cache
-    ports:
-      - "3000:3000"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.emplica-frontend.rule=Host(`emplica.fr`)"
-      - "traefik.http.services.emplica-frontend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.emplica-frontend.entrypoints=websecure"
-      - "traefik.http.routers.emplica-frontend.tls=true"
-      - "traefik.http.routers.emplica-frontend.tls.certresolver=myresolver"
+    image: gonogo-frontend
     networks:
       - traefik_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gonogo-frontend.rule=Host(`emplica.fr`)"
+      - "traefik.http.services.gonogo-frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.gonogo-frontend.entrypoints=websecure"
+      - "traefik.http.routers.gonogo-frontend.tls=true"
+      - "traefik.http.routers.gonogo-frontend.tls.certresolver=myresolver"
 
   minio:
     image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioaccesskey
-      MINIO_ROOT_PASSWORD: miniosecretkey
-    volumes:
-      - minio_data:/data/minio
-    command: 'minio server /data/minio --address ":9000" --console-address ":9001"'
     networks:
-      - jobpilot_network
+      - traefik_network
+    command: server /data --console-address ":9001"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.minio.rule=Host(`minio.emplica.fr`)"
-      - "traefik.http.services.minio.loadbalancer.server.port=9000"
-      - "traefik.http.routers.minio.entrypoints=websecure"
-      - "traefik.http.routers.minio.tls=true"
-      - "traefik.http.routers.minio.tls.certresolver=minio_resolver"
+      - "traefik.http.routers.gonogo-minio.rule=Host(`minio.emplica.fr`)"
+      - "traefik.http.services.gonogo-minio.loadbalancer.server.port=9000"
+      - "traefik.http.routers.gonogo-minio.entrypoints=websecure"
+      - "traefik.http.routers.gonogo-minio.tls=true"
+      - "traefik.http.routers.gonogo-minio.tls.certresolver=myresolver"
 
 networks:
   traefik_network:
