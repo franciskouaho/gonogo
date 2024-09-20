@@ -66,11 +66,9 @@ async def download_document(file_path: str):
     s3_bucket = "jobpilot"
     
     try:
-        # Récupérer le fichier depuis S3/Minio
         s3_client = get_s3_client()
         response = s3_client.get_object(Bucket=s3_bucket, Key=file_path)
         
-        # Déterminer le type MIME en fonction de l'extension du fichier
         file_extension = os.path.splitext(file_path)[1].lower()
         if file_extension == '.docx':
             media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -79,7 +77,6 @@ async def download_document(file_path: str):
         else:
             media_type = "application/octet-stream"
         
-        # Utiliser StreamingResponse pour renvoyer le fichier
         return StreamingResponse(
             response['Body'].iter_chunks(),
             media_type=media_type,

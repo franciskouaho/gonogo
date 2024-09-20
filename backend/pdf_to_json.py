@@ -1,13 +1,19 @@
-import fitz
+import io
 import json
+from PyPDF2 import PdfReader
 
-def pdf_to_json(pdf_path):
-    document = fitz.open(pdf_path)
+def pdf_to_json(pdf_input):
+    if isinstance(pdf_input, io.BytesIO):
+        reader = PdfReader(pdf_input)
+    elif isinstance(pdf_input, str):
+        reader = PdfReader(pdf_input)
+    else:
+        raise ValueError("L'entrée doit être un chemin de fichier ou un objet BytesIO")
+
     pdf_content = []
 
-    for page_num in range(document.page_count):
-        page = document.load_page(page_num)
-        text = page.get_text("text")
+    for page_num, page in enumerate(reader.pages):
+        text = page.extract_text()
         pdf_content.append({
             "page": page_num + 1,
             "content": text
