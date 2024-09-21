@@ -12,6 +12,7 @@ from backend.process_gonogo_file import process_gonogo_file
 from backend.pdf_to_json import pdf_to_json
 from backend.xlsx_to_json import xlsx_to_json
 from backend.docx_to_json import docx_to_json
+from backend.doc_to_json import doc_to_json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,6 +31,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
 
 @app.post("/read-file")
 async def match(zip_file: UploadFile = File(...)):
@@ -64,11 +69,11 @@ async def match(zip_file: UploadFile = File(...)):
 async def download_document(file_path: str):
     logger.info(f"Demande de téléchargement pour le fichier : {file_path}")
     s3_bucket = "jobpilot"
-    
+
     try:
         s3_client = get_s3_client()
         response = s3_client.get_object(Bucket=s3_bucket, Key=file_path)
-        
+
         file_extension = os.path.splitext(file_path)[1].lower()
         if file_extension == '.docx':
             media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -76,7 +81,7 @@ async def download_document(file_path: str):
             media_type = "application/pdf"
         else:
             media_type = "application/octet-stream"
-        
+
         return StreamingResponse(
             response['Body'].iter_chunks(),
             media_type=media_type,
@@ -94,7 +99,9 @@ def process_zip_from_s3(bucket, key):
     zip_content = zip_obj['Body'].read()
 
     results = []
+    processed_files = 0
     with zipfile.ZipFile(io.BytesIO(zip_content)) as zip_ref:
+        total_files = len([file_info for file_info in zip_ref.infolist() if not (file_info.filename.startswith('__MACOSX') or file_info.filename.startswith('._'))])
         for file_info in zip_ref.infolist():
             if file_info.filename.startswith('__MACOSX') or file_info.filename.startswith('._'):
                 continue
@@ -105,17 +112,25 @@ def process_zip_from_s3(bucket, key):
             try:
                 if file_extension == 'pdf':
                     cv_json = pdf_to_json(io.BytesIO(file_content))
-                elif file_extension == 'xlsx':
+                elif file_extension in ['xlsx', 'xls']:
                     cv_json = xlsx_to_json(io.BytesIO(file_content))
                 elif file_extension == 'docx':
                     cv_json = docx_to_json(io.BytesIO(file_content))
+                elif file_extension == 'doc':
+                    cv_json = doc_to_json(file_content)
                 else:
+                    logger.info(f"Extension non prise en charge pour le fichier {file_info.filename}")
                     continue
 
-                if isinstance(cv_json, (list, dict)):
+                if cv_json:
                     results.append({"file": file_info.filename, "content": cv_json})
+                    processed_files += 1
+                else:
+                    logger.warning(f"Résultat vide pour le fichier {file_info.filename}")
 
             except Exception as e:
                 logger.error(f"Erreur lors de la conversion du fichier {file_info.filename} : {str(e)}")
 
+    logger.info(f"Total des fichiers dans le zip : {total_files}")
+    logger.info(f"Fichiers traités avec succès : {processed_files}")
     return results

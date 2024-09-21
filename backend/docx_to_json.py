@@ -17,4 +17,7 @@ def docx_to_json(file_path):
         return json.loads(json_data)
     except Exception as e:
         print(f"Erreur lors de la conversion du fichier DOCX : {str(e)}")
+        print(f"Type de fichier : {type(file_path)}")
+        print(f"Contenu du fichier (premiers 100 octets) : {file_path.read(100)}")
+        file_path.seek(0)  # Remettre le curseur au début du fichier
         return None

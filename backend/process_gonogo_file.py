@@ -270,14 +270,97 @@ def create_word_document(chatgpt_analysis, file_path):
         logger.error(f"Erreur lors de la création du document Word : {str(e)}")
         raise
 
+def split_results(results, max_tokens):
+    parts = []
+    current_part = []
+    current_tokens = 0
+
+    for result in results:
+        result_tokens = len(json.dumps(result)) // 4  # Estimation des tokens
+        if current_tokens + result_tokens > max_tokens:
+            parts.append(current_part)
+            current_part = []
+            current_tokens = 0
+        current_part.append(result)
+        current_tokens += result_tokens
+
+    if current_part:
+        parts.append(current_part)
+
+    return parts
+
+def merge_analyses(analyses):
+    merged = {
+        "BU": "",
+        "Métier / Société": "",
+        "Donneur d'ordres": "",
+        "Opportunité": "",
+        "Calendrier": {
+            "Date limite de remise des offres": "",
+            "Début de la prestation": "",
+            "Délai de validité des offres": "",
+            "Autres dates importantes": []
+        },
+        "Critères d'attribution": [],
+        "Description de l'offre": {
+            "Durée": "",
+            "Synthèse Lot": "",
+            "CA TOTAL offensif": "",
+            "Missions générales": [],
+            "Matériels à disposition": []
+        },
+        "Objet du marché": "",
+        "Périmètre de la consultation": "",
+        "Description des prestations": [],
+        "Exigences": [],
+        "Missions et compétences attendues": [],
+        "Profil des hôtes ou hôtesses d'accueil": {
+            "Qualités": [],
+            "Compétences nécessaires": []
+        },
+        "Plages horaires": [],
+        "PSE": "",
+        "Formations": [],
+        "Intérêt pour le groupe": {
+            "Forces": [],
+            "Faiblesses": [],
+            "Opportunités": [],
+            "Menaces": []
+        },
+        "Formule de révision des prix": ""
+    }
+
+    for analysis in analyses:
+        for key, value in analysis.items():
+            if isinstance(value, list):
+                merged[key].extend(value)
+            elif isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    if isinstance(sub_value, list):
+                        merged[key][sub_key].extend(sub_value)
+                    else:
+                        merged[key][sub_key] = sub_value
+            else:
+                merged[key] = value
+
+    return merged
+
 def process_gonogo_file(results):
     try:
         logger.info(f"Début du traitement des résultats")
 
-        chatgpt_analysis = get_chatgpt_response(results)
-        logger.info("Analyse ChatGPT obtenue")
+        max_tokens = 16000  # Limite de tokens pour le modèle
+        result_parts = split_results(results, max_tokens)
 
-        structured_analysis = json.loads(chatgpt_analysis)
+        all_analyses = []
+        for part in result_parts:
+            chatgpt_analysis = get_chatgpt_response(part)
+            logger.info("Analyse ChatGPT obtenue")
+            structured_analysis = json.loads(chatgpt_analysis)
+            all_analyses.append(structured_analysis)
+
+        # Fusionner les analyses
+        merged_analysis = merge_analyses(all_analyses)
 
         fine_tuning_data = prepare_fine_tuning_data(results)
         logger.info(f"Données préparées pour le fine-tuning. Nombre d'exemples : {len(fine_tuning_data)}")
@@ -303,33 +386,29 @@ def process_gonogo_file(results):
         status = client.fine_tuning.jobs.retrieve(fine_tune_id).status
 
         word_file_path = 'chatgpt_analysis.docx'
-        create_word_document(structured_analysis, word_file_path)
+        create_word_document(merged_analysis, word_file_path)
+        logger.info(f"Document Word créé avec succès : {word_file_path}")
 
         if upload_to_s3(word_file_path, f"documents/{word_file_path}"):
             logger.info(f"Document Word uploadé vers MinIO : documents/{word_file_path}")
         else:
             logger.error("Échec de l'upload du document Word vers MinIO")
 
+        os.remove(jsonl_filename)
+        os.remove(word_file_path)
+        logger.info(f"Fichier temporaire {jsonl_filename} supprimé")
+        logger.info(f"Fichier temporaire {word_file_path} supprimé")
+
         return {
             "message": f"Fine-tuning démarré avec succès. Statut actuel : {status}",
             "fine_tune_id": fine_tune_id,
-            "chatgpt_analysis": structured_analysis,
+            "chatgpt_analysis": merged_analysis,
             "word_document": f"documents/{word_file_path}"
         }
 
-    except json.JSONDecodeError:
-        logger.error("Erreur lors du parsing de la réponse ChatGPT")
-        return {"error": "Erreur lors de l'analyse structurée des documents"}
     except Exception as e:
-        logger.exception(f"Erreur lors du traitement : {str(e)}")
-        return {"error": f"Erreur lors du traitement : {str(e)}"}
-    finally:
-        if 'jsonl_filename' in locals() and os.path.exists(jsonl_filename):
-            os.remove(jsonl_filename)
-            logger.info(f"Fichier temporaire {jsonl_filename} supprimé")
-        if os.path.exists(word_file_path):
-            os.remove(word_file_path)
-            logger.info(f"Fichier temporaire {word_file_path} supprimé")
+        logger.error(f"Erreur lors du traitement : {str(e)}")
+        return {"error": str(e)}
 
 def read_jsonl_file(file_path):
     logging.info(f"Tentative de lecture du fichier : {file_path}")
