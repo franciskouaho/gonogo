@@ -100,14 +100,19 @@ def process_zip_from_s3(bucket, key):
 
     results = []
     processed_files = 0
+    valid_files = 0
     with zipfile.ZipFile(io.BytesIO(zip_content)) as zip_ref:
-        total_files = len([file_info for file_info in zip_ref.infolist() if not (file_info.filename.startswith('__MACOSX') or file_info.filename.startswith('._'))])
         for file_info in zip_ref.infolist():
-            if file_info.filename.startswith('__MACOSX') or file_info.filename.startswith('._'):
+            if file_info.filename.startswith('__MACOSX') or file_info.filename.startswith('._') or file_info.filename == '.DS_Store':
                 continue
 
-            file_content = zip_ref.read(file_info.filename)
             file_extension = file_info.filename.split('.')[-1].lower()
+            if file_extension not in ['pdf', 'xlsx', 'xls', 'docx', 'doc']:
+                logger.info(f"Extension non prise en charge pour le fichier {file_info.filename}")
+                continue
+
+            valid_files += 1
+            file_content = zip_ref.read(file_info.filename)
 
             try:
                 if file_extension == 'pdf':
@@ -119,7 +124,6 @@ def process_zip_from_s3(bucket, key):
                 elif file_extension == 'doc':
                     cv_json = doc_to_json(file_content)
                 else:
-                    logger.info(f"Extension non prise en charge pour le fichier {file_info.filename}")
                     continue
 
                 if cv_json:
@@ -128,9 +132,11 @@ def process_zip_from_s3(bucket, key):
                 else:
                     logger.warning(f"Résultat vide pour le fichier {file_info.filename}")
 
+            except zipfile.BadZipFile:
+                logger.error(f"Erreur lors de la conversion du fichier {file_info.filename} : Le fichier est corrompu ou n'est pas un fichier zip valide")
             except Exception as e:
                 logger.error(f"Erreur lors de la conversion du fichier {file_info.filename} : {str(e)}")
 
-    logger.info(f"Total des fichiers dans le zip : {total_files}")
+    logger.info(f"Total des fichiers valides dans le zip : {valid_files}")
     logger.info(f"Fichiers traités avec succès : {processed_files}")
     return results
