@@ -9,10 +9,6 @@ const getBaseUrl = () => {
 
 const api: AxiosInstance = axios.create({
     baseURL: getBaseUrl(),
-    withCredentials: true,
 });
-
-api.defaults.headers.common['Access-Control-Allow-Origin'] = '*';
-api.defaults.headers.common['Access-Control-Allow-Methods'] = '*';
 
 export default api;
