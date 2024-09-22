@@ -13,5 +13,6 @@ const api: AxiosInstance = axios.create({
 });
 
 api.defaults.headers.common['Access-Control-Allow-Origin'] = '*';
+api.defaults.headers.common['Access-Control-Allow-Methods'] = '*';
 
 export default api;
