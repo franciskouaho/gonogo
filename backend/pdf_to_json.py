@@ -1,6 +1,6 @@
 import io
 import json
-from PyPDF2 import PdfReader
+from PyPDF2 import PdfFileReader as PdfReader
 
 def pdf_to_json(pdf_input):
     if isinstance(pdf_input, io.BytesIO):

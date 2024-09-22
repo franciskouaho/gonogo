@@ -77,7 +77,7 @@ const Home: FunctionComponent = () => {
             formData.append('zip_file', file);
             return api.post<ApiResponse>('read-file', formData, {
                 headers: {
-                    'Content-Type': 'multipart/form-data'
+                    'Content-Type': 'multipart/form-data',
                 }
             }).then(response => response.data);
         },
