@@ -3,63 +3,9 @@
 import { ChangeEvent, FunctionComponent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import api from "@/config/api";
-import axios from 'axios';
+import ApiResponse from "@/types/api-response";
+import ChatGPTAnalysis from "@/types/chatgpt-analysis";
 
-interface ChatGPTAnalysis {
-    BU: string;
-    "Métier / Société": string;
-    "Donneur d'ordres": string;
-    Opportunité: string;
-    Calendrier: {
-        "Date limite de remise des offres": string;
-        "Début de la prestation": string;
-        "Délai de validité des offres": string;
-        "Autres dates importantes": string[];
-    };
-    "Critères d'attribution": string[];
-    "Description de l'offre": {
-        Durée: string;
-        "Synthèse Lot": string;
-        "CA TOTAL offensif": string;
-        "Missions générales": string[];
-        "Matériels à disposition": string[];
-    };
-    "Objet du marché": string;
-    "Périmètre de la consultation": string;
-    "Description des prestations": string[];
-    Exigences: string[];
-    "Missions et compétences attendues": string[];
-    "Profil des hôtes ou hôtesses d'accueil": {
-        Qualités: string[];
-        "Compétences nécessaires": string[];
-    };
-    "Plages horaires": Array<{
-        Horaires: string;
-        Jour: string;
-        "Accueil physique": string;
-        "Accueil téléphonique": string;
-        "Gestion colis *": string;
-        "Gestion courrier": string;
-        Bilingue: string;
-        Campus: string;
-    }>;
-    PSE: string;
-    Formations: string[];
-    "Intérêt pour le groupe": {
-        Forces: string[];
-        Faiblesses: string[];
-        Opportunités: string[];
-        Menaces: string[];
-    };
-    "Formule de révision des prix": string | null;
-}
-
-interface ApiResponse {
-    message: string;
-    fine_tune_id: string;
-    chatgpt_analysis: ChatGPTAnalysis;
-    word_document: string;
-}
 
 const Home: FunctionComponent = () => {
     const [file, setFile] = useState<File | null>(null);
@@ -70,16 +16,17 @@ const Home: FunctionComponent = () => {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleFileUpload = useMutation<ApiResponse, Error, void>({
-        mutationFn: () => {
+        mutationFn: async () => {
             if (!file) throw new Error("Aucun fichier sélectionné");
             setIsLoading(true);
             const formData = new FormData();
             formData.append('zip_file', file);
-            return api.post<ApiResponse>('read-file', formData, {
+            const response = await api.post<ApiResponse>('read-file', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 }
-            }).then(response => response.data);
+            });
+            return response.data;
         },
         onSuccess: (data) => {
             console.log("Réponse complète:", data);
