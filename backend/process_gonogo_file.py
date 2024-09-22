@@ -17,8 +17,6 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-gonogo_path = 'backend/gonogo_data.jsonl'
-
 def prepare_fine_tuning_data(results):
     fine_tuning_data = []
     for item in results:
@@ -54,84 +52,17 @@ def start_fine_tuning(file_id):
         logger.error(f"Erreur lors du démarrage du fine-tuning : {str(e)}")
         return None
 
-def get_chatgpt_response(results):
-    try:
-        with open(gonogo_path, 'r', encoding='utf-8') as f:
-            gonogo_example = json.load(f)
-
-        prompt = """Analysez les documents suivants et extrayez les informations selon la structure exacte ci-dessous. Si une information n'est pas disponible, laissez le champ vide. Utilisez le format JSON pour la réponse.
-
-        Structure à suivre :
-        {
-            "BU": "",
-            "Métier / Société": "",
-            "Donneur d'ordres": "",
-            "Opportunité": "",
-            "Calendrier": {
-                "Date limite de remise des offres": "",
-                "Début de la prestation": "",
-                "Délai de validité des offres": "",
-                "Autres dates importantes": []
-            },
-            "Critères d'attribution": [],
-            "Description de l'offre": {
-                "Durée": "",
-                "Synthèse Lot": "",
-                "CA TOTAL offensif": "",
-                "Missions générales": [],
-                "Matériels à disposition": []
-            },
-            "Objet du marché": "",
-            "Périmètre de la consultation": "",
-            "Description des prestations": [],
-            "Exigences": [],
-            "Missions et compétences attendues": [],
-            "Profil des hôtes ou hôtesses d'accueil": {
-                "Qualités": [],
-                "Compétences nécessaires": []
-            },
-            "Plages horaires": [],
-            "PSE": "",
-            "Formations": [],
-            "Intérêt pour le groupe": {
-                "Forces": [],
-                "Faiblesses": [],
-                "Opportunités": [],
-                "Menaces": []
-            },
-            "Formule de révision des prix": ""
-        }
-
-        Exemple de structure (à adapter selon le contenu réel) :
-        """
-        prompt += json.dumps(gonogo_example, ensure_ascii=False, indent=2)
-
-        prompt += "\n\nMaintenant, analysez les fichiers suivants en utilisant la même structure :\n\n"
-
-        for item in results:
-            prompt += f"Fichier: {item['file']}\n"
-            content = item['content']
-            if isinstance(content, str):
-                content_summary = content[:3000]
-            elif isinstance(content, dict):
-                content_summary = json.dumps(content, ensure_ascii=False)[:3000]
-            else:
-                content_summary = str(content)[:3000]
-            prompt += f"Contenu: {content_summary}...\n\n"
-
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo-16k",
-            messages=[
-                {"role": "system", "content": "Vous êtes un expert en analyse de documents d'appels d'offres, capable d'extraire des informations structurées selon un format spécifique."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=4000,
-            temperature=0.2
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"Erreur dans l'appel API : {str(e)}")
-        raise
+def get_chatgpt_response(part):
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Vous êtes un assistant..."},
+            {"role": "user", "content": f"Analysez le contenu suivant : {part}"}
+        ]
+    )
+    chatgpt_response = response.choices[0].message.content
+    logger.info(f"Réponse brute de ChatGPT : {chatgpt_response}")
+    return chatgpt_response
 
 def upload_to_s3(local_file, s3_file):
     try:
@@ -349,17 +280,21 @@ def process_gonogo_file(results):
     try:
         logger.info(f"Début du traitement des résultats")
 
-        max_tokens = 16000  # Limite de tokens pour le modèle
+        max_tokens = 16000
         result_parts = split_results(results, max_tokens)
 
         all_analyses = []
         for part in result_parts:
             chatgpt_analysis = get_chatgpt_response(part)
             logger.info("Analyse ChatGPT obtenue")
-            structured_analysis = json.loads(chatgpt_analysis)
+            try:
+                structured_analysis = json.loads(chatgpt_analysis)
+                logger.info(f"Analyse structurée : {structured_analysis}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Erreur de parsing JSON : {e}")
+                structured_analysis = {}
             all_analyses.append(structured_analysis)
 
-        # Fusionner les analyses
         merged_analysis = merge_analyses(all_analyses)
 
         fine_tuning_data = prepare_fine_tuning_data(results)
