@@ -4,11 +4,15 @@ import os
 import zipfile
 import shutil
 import json
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from passlib.crypto.scrypt import backend
+
 from backend.s3_config import put_object, get_s3_client, get_object
 from backend.process_gonogo_file import process_gonogo_file
+from backend.nettoyer_json import nettoyer_json
 from backend.pdf_to_json import pdf_to_json
 from backend.xlsx_to_json import xlsx_to_json
 from backend.docx_to_json import docx_to_json
@@ -127,7 +131,9 @@ def process_zip_from_s3(bucket, key):
                     continue
 
                 if cv_json:
-                    results.append({"file": file_info.filename, "content": cv_json})
+                    cv_json_nettoye = nettoyer_json(cv_json)
+                    print(f"Résultat pour le fichier {file_info.filename} : {cv_json_nettoye}")
+                    results.append({"file": file_info.filename, "content": cv_json_nettoye})
                     processed_files += 1
                 else:
                     logger.warning(f"Résultat vide pour le fichier {file_info.filename}")
