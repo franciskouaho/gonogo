@@ -132,7 +132,6 @@ def process_zip_from_s3(bucket, key):
 
                 if cv_json:
                     cv_json_nettoye = nettoyer_json(cv_json)
-                    print(f"Résultat pour le fichier {file_info.filename} : {cv_json_nettoye}")
                     results.append({"file": file_info.filename, "content": cv_json_nettoye})
                     processed_files += 1
                 else:

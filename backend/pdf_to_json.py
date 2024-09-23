@@ -1,12 +1,12 @@
 import io
 import json
-from PyPDF2 import PdfFileReader as PdfReader
+import PyPDF2
 
 def pdf_to_json(pdf_input):
     if isinstance(pdf_input, io.BytesIO):
-        reader = PdfReader(pdf_input)
+        reader = PyPDF2.PdfReader(pdf_input)
     elif isinstance(pdf_input, str):
-        reader = PdfReader(pdf_input)
+        reader = PyPDF2.PdfReader(pdf_input)
     else:
         raise ValueError("L'entrée doit être un chemin de fichier ou un objet BytesIO")
 
