@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import time
-import tiktoken
 
 from botocore.exceptions import NoCredentialsError
 from docx import Document
@@ -54,27 +53,23 @@ def start_fine_tuning(file_id):
         return None
 
 def get_chatgpt_response(part):
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Vous êtes un assistant..."},
+            {"role": "user", "content": f"Analysez le contenu suivant : {part}"}
+        ]
+    )
+    chatgpt_response = response.choices[0].message.content
+    logger.info(f"Réponse brute de ChatGPT : {chatgpt_response}")
+
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "Vous êtes un assistant spécialisé dans l'analyse de documents techniques. Veuillez fournir une analyse structurée au format JSON."},
-                {"role": "user", "content": f"Analysez le contenu suivant et retournez le résultat au format JSON : {part}"}
-            ]
-        )
-        chatgpt_response = response.choices[0].message.content
-        logger.info(f"Réponse brute de ChatGPT : {chatgpt_response}")
-        
-        # Tentative de parsing JSON
-        try:
-            json_response = json.loads(chatgpt_response)
-            return json_response
-        except json.JSONDecodeError:
-            logger.warning("La réponse n'est pas au format JSON. Traitement comme texte brut.")
-            return {"analyse_brute": chatgpt_response}
-    except Exception as e:
-        logger.error(f"Erreur lors de l'appel à l'API ChatGPT : {str(e)}")
-        return {"erreur": str(e)}
+        # Vérifier si la réponse est bien formatée en JSON
+        parsed_response = json.loads(chatgpt_response)
+        return parsed_response
+    except json.JSONDecodeError as e:
+        logger.error(f"Erreur de parsing JSON : {str(e)}")
+        return None
 
 def upload_to_s3(local_file, s3_file):
     try:
@@ -213,18 +208,13 @@ def create_word_document(chatgpt_analysis, file_path):
         logger.error(f"Erreur lors de la création du document Word : {str(e)}")
         raise
 
-def num_tokens_from_string(string: str, encoding_name: str = "cl100k_base") -> int:
-    encoding = tiktoken.get_encoding(encoding_name)
-    num_tokens = len(encoding.encode(string))
-    return num_tokens
-
 def split_results(results, max_tokens):
     parts = []
     current_part = []
     current_tokens = 0
 
     for result in results:
-        result_tokens = num_tokens_from_string(json.dumps(result))
+        result_tokens = len(json.dumps(result)) // 4  # Estimation des tokens
         if current_tokens + result_tokens > max_tokens:
             parts.append(current_part)
             current_part = []
@@ -297,23 +287,20 @@ def process_gonogo_file(results):
     try:
         logger.info(f"Début du traitement des résultats")
 
-        max_tokens = 8000  # Réduire la taille maximale des tokens
+        max_tokens = 16000
         result_parts = split_results(results, max_tokens)
 
         all_analyses = []
         for part in result_parts:
             chatgpt_analysis = get_chatgpt_response(part)
-            
-            # Vérifier si la réponse est un dictionnaire et contient la clé 'analysis'
-            if isinstance(chatgpt_analysis, dict):
-                if 'analysis' in chatgpt_analysis:
-                    all_analyses.append(chatgpt_analysis['analysis'])
-                elif 'analyse' in chatgpt_analysis:  # Pour gérer les réponses en français
-                    all_analyses.append(chatgpt_analysis['analyse'])
-                else:
-                    all_analyses.append(chatgpt_analysis)
-            else:
-                all_analyses.append({"analyse_brute": str(chatgpt_analysis)})
+            logger.info("Analyse ChatGPT obtenue")
+            try:
+                structured_analysis = json.loads(chatgpt_analysis)
+                logger.info(f"Analyse structurée : {structured_analysis}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Erreur de parsing JSON : {e}")
+                structured_analysis = {}
+            all_analyses.append(structured_analysis)
 
         merged_analysis = merge_analyses(all_analyses)
 
@@ -360,6 +347,7 @@ def process_gonogo_file(results):
             "chatgpt_analysis": merged_analysis,
             "word_document": f"documents/{word_file_path}"
         }
+
     except Exception as e:
         logger.error(f"Erreur lors du traitement : {str(e)}")
         return {"error": str(e)}
