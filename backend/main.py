@@ -59,7 +59,7 @@ async def match(zip_file: UploadFile = File(...)):
             logger.info(f"Résultats sauvegardés dans S3 : {results_file_key}")
 
             logger.info(f"Traitement terminé. Nombre de fichiers traités : {len(results)}")
-            response_result = process_gonogo_file(results)
+            response_result = await process_gonogo_file(results)
             logger.info(f"Résultat du traitement : {response_result}")
             return response_result
         else:
@@ -71,31 +71,21 @@ async def match(zip_file: UploadFile = File(...)):
 
 @app.get("/download-document")
 async def download_document(file_path: str):
-    logger.info(f"Demande de téléchargement pour le fichier : {file_path}")
-    s3_bucket = "jobpilot"
-
+    if not file_path:
+        raise HTTPException(status_code=400, detail="Chemin de fichier manquant")
+    
     try:
-        s3_client = get_s3_client()
         response = s3_client.get_object(Bucket=s3_bucket, Key=file_path)
-
-        file_extension = os.path.splitext(file_path)[1].lower()
-        if file_extension == '.docx':
-            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        elif file_extension == '.pdf':
-            media_type = "application/pdf"
-        else:
-            media_type = "application/octet-stream"
-
         return StreamingResponse(
             response['Body'].iter_chunks(),
-            media_type=media_type,
-            headers={
-                'Content-Disposition': f'attachment; filename="{os.path.basename(file_path)}"'
-            }
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            headers={"Content-Disposition": f"attachment; filename={file_path}"}
         )
+    except NoSuchKey:
+        raise HTTPException(status_code=404, detail="Fichier non trouvé")
     except Exception as e:
-        logger.exception(f"Erreur lors du téléchargement du fichier : {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors du téléchargement : {str(e)}")
+        logger.error(f"Erreur lors du téléchargement du fichier : {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors du téléchargement du fichier")
 
 def process_zip_from_s3(bucket, key):
     s3_client = get_s3_client()

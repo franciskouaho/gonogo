@@ -25,3 +25,4 @@ docx2txt
 pypandoc
 tiktoken
 anthropic
+tiktoken
