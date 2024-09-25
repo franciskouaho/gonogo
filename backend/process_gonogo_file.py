@@ -17,13 +17,14 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
 def prepare_fine_tuning_data(results):
     fine_tuning_data = []
     for item in results:
         fine_tuning_data.append({
             "messages": [
                 {"role": "system", "content": "Vous êtes un expert en bureau d'études, capable d'analyser des documents techniques et de fournir des analyses détaillées."},
-                {"role": "user", "content": f"Analysez le contenu suivant : {item['content']}"},
+                {"role": "user", "content": f"Analysez le contenu suivant : {item}"},
                 {"role": "assistant", "content": "Voici l'analyse du contenu fourni : [Insérez ici une analyse détaillée]"}
             ]
         })
@@ -52,24 +53,47 @@ def start_fine_tuning(file_id):
         logger.error(f"Erreur lors du démarrage du fine-tuning : {str(e)}")
         return None
 
-def get_chatgpt_response(part):
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Vous êtes un assistant..."},
-            {"role": "user", "content": f"Analysez le contenu suivant : {part}"}
-        ]
-    )
-    chatgpt_response = response.choices[0].message.content
-    logger.info(f"Réponse brute de ChatGPT : {chatgpt_response}")
+def split_content(content, max_tokens=4000):
+    # Convertir le contenu en chaîne de caractères s'il ne l'est pas déjà
+    if not isinstance(content, str):
+        content = json.dumps(content, indent=2)
+    
+    words = content.split()
+    chunks = []
+    current_chunk = []
+    current_length = 0
 
+    for word in words:
+        if current_length + len(word) + 1 > max_tokens:
+            chunks.append(' '.join(current_chunk))
+            current_chunk = [word]
+            current_length = len(word)
+        else:
+            current_chunk.append(word)
+            current_length += len(word) + 1
+
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+
+    return chunks
+
+def get_chatgpt_response(part):
     try:
-        # Vérifier si la réponse est bien formatée en JSON
-        parsed_response = json.loads(chatgpt_response)
-        return parsed_response
-    except json.JSONDecodeError as e:
-        logger.error(f"Erreur de parsing JSON : {str(e)}")
-        return None
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Vous êtes un assistant spécialisé dans l'analyse de documents techniques. Veuillez fournir une analyse structurée."},
+                {"role": "user", "content": f"Analysez le contenu suivant : {part}"}
+            ]
+        )
+        chatgpt_response = response.choices[0].message.content
+        logger.debug(f"Réponse brute de ChatGPT : {chatgpt_response}")
+        
+        # Retourner la réponse sous forme de dictionnaire
+        return {"analyse": chatgpt_response}
+    except Exception as e:
+        logger.error(f"Erreur lors de l'appel à l'API ChatGPT : {str(e)}", exc_info=True)
+        return {"erreur": str(e)}
 
 def upload_to_s3(local_file, s3_file):
     try:
@@ -77,7 +101,6 @@ def upload_to_s3(local_file, s3_file):
             file_data = file.read()
             content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
             if put_object('jobpilot', s3_file, file_data, len(file_data), content_type):
-                logger.info(f"Fichier {local_file} téléchargé sur MinIO avec succès")
                 return True
             else:
                 logger.error(f"Échec de l'upload du fichier {local_file} sur MinIO")
@@ -95,9 +118,13 @@ def download_from_s3(s3_file, local_file):
         logger.error("Identifiants non valides pour accéder à S3")
         return False
 
-def create_word_document(chatgpt_analysis, file_path):
+def create_word_document(chatgpt_analysis):
     try:
         doc = Document()
+        file_path = f"analyse_{int(time.time())}.docx"
+
+        if isinstance(chatgpt_analysis, str):
+            chatgpt_analysis = json.loads(chatgpt_analysis)
 
         def add_heading(text, level):
             heading = doc.add_heading(text, level=level)
@@ -114,96 +141,23 @@ def create_word_document(chatgpt_analysis, file_path):
 
         add_heading("Analyse ChatGPT", 0)
 
-        add_heading("Informations générales", 1)
         for key, value in chatgpt_analysis.items():
+            add_heading(key, 1)
             if isinstance(value, str):
-                add_paragraph(f"{key}: {value}")
-
-        add_heading("Calendrier", 1)
-        for key, value in chatgpt_analysis['Calendrier'].items():
-            if isinstance(value, str):
-                add_paragraph(f"{key}: {value}")
+                add_paragraph(value)
             elif isinstance(value, list):
-                add_paragraph(f"{key}:")
                 add_list(value)
-
-        add_heading("Critères d'attribution", 1)
-        if chatgpt_analysis["Critères d'attribution"]:
-            add_list(chatgpt_analysis["Critères d'attribution"])
-        else:
-            add_paragraph("Aucun critère d'attribution n'est spécifié.")
-
-        add_heading("Description de l'offre", 1)
-        for key, value in chatgpt_analysis["Description de l'offre"].items():
-            if isinstance(value, str):
-                add_paragraph(f"{key}: {value}")
-            elif isinstance(value, list):
-                add_paragraph(f"{key}:")
-                add_list(value)
-
-        add_heading("Description des prestations", 1)
-        if chatgpt_analysis["Description des prestations"]:
-            add_list(chatgpt_analysis["Description des prestations"])
-        else:
-            add_paragraph("Aucune description des prestations n'est disponible.")
-
-        add_heading("Exigences", 1)
-        if chatgpt_analysis["Exigences"]:
-            add_list(chatgpt_analysis["Exigences"])
-        else:
-            add_paragraph("Aucune exigence n'est spécifiée.")
-
-        add_heading("Missions et compétences attendues", 1)
-        if chatgpt_analysis["Missions et compétences attendues"]:
-            add_list(chatgpt_analysis["Missions et compétences attendues"])
-        else:
-            add_paragraph("Aucune mission ou compétence attendue n'est spécifiée.")
-
-        add_heading("Profil des hôtes ou hôtesses d'accueil", 1)
-        for key, value in chatgpt_analysis["Profil des hôtes ou hôtesses d'accueil"].items():
-            add_paragraph(f"{key}:")
-            if value:
-                add_list(value)
-            else:
-                add_paragraph("Aucune information disponible.")
-
-        add_heading("Plages horaires", 1)
-        if chatgpt_analysis["Plages horaires"]:
-            headers = ["Horaires", "Jour", "Accueil physique", "Accueil téléphonique", "Gestion colis *", "Gestion courrier", "Bilingue", "Campus"]
-            table = doc.add_table(rows=1, cols=len(headers))
-            table.style = 'Table Grid'
-            hdr_cells = table.rows[0].cells
-            for i, header in enumerate(headers):
-                hdr_cells[i].text = header
-            for plage in chatgpt_analysis["Plages horaires"]:
-                row_cells = table.add_row().cells
-                for i, key in enumerate(headers):
-                    row_cells[i].text = str(plage.get(key, ''))  # Utilisation de .get() avec une valeur par défaut
-        else:
-            add_paragraph("Aucune information sur les plages horaires n'est disponible.")
-
-        add_heading("PSE", 1)
-        add_paragraph(chatgpt_analysis["PSE"] if chatgpt_analysis["PSE"] else "Aucune information PSE disponible.")
-
-        add_heading("Formations", 1)
-        if chatgpt_analysis["Formations"]:
-            add_list(chatgpt_analysis["Formations"])
-        else:
-            add_paragraph("Aucune information sur les formations n'est disponible.")
-
-        add_heading("Intérêt pour le groupe", 1)
-        for key, value in chatgpt_analysis["Intérêt pour le groupe"].items():
-            add_paragraph(f"{key}:")
-            if value:
-                add_list(value)
-            else:
-                add_paragraph("Aucune information disponible.")
-
-        add_heading("Formule de révision des prix", 1)
-        add_paragraph(chatgpt_analysis["Formule de révision des prix"] if chatgpt_analysis["Formule de révision des prix"] else "Aucune formule de révision des prix spécifiée.")
+            elif isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    add_paragraph(f"{sub_key}:")
+                    if isinstance(sub_value, list):
+                        add_list(sub_value)
+                    else:
+                        add_paragraph(str(sub_value))
 
         doc.save(file_path)
         logger.info(f"Document Word créé avec succès : {file_path}")
+        return file_path
     except Exception as e:
         logger.error(f"Erreur lors de la création du document Word : {str(e)}")
         raise
@@ -214,7 +168,7 @@ def split_results(results, max_tokens):
     current_tokens = 0
 
     for result in results:
-        result_tokens = len(json.dumps(result)) // 4  # Estimation des tokens
+        result_tokens = len(json.dumps(result)) // 6  # Estimation des tokens
         if current_tokens + result_tokens > max_tokens:
             parts.append(current_part)
             current_part = []
@@ -285,71 +239,36 @@ def merge_analyses(analyses):
 
 def process_gonogo_file(results):
     try:
-        logger.info(f"Début du traitement des résultats")
+        logger.info("Début du traitement des résultats")
+        
+        # Convertir le dictionnaire en chaîne de caractères
+        content = json.dumps(results, indent=2)
+        
+        chatgpt_response = get_chatgpt_response(content)
+        logger.info("Réponse ChatGPT obtenue")
+        logger.debug(f"Réponse brute de ChatGPT : {json.dumps(chatgpt_response, indent=2)}")
 
-        max_tokens = 16000
-        result_parts = split_results(results, max_tokens)
+        # Utiliser directement la réponse de ChatGPT
+        chatgpt_analysis = chatgpt_response
 
-        all_analyses = []
-        for part in result_parts:
-            chatgpt_analysis = get_chatgpt_response(part)
-            logger.info("Analyse ChatGPT obtenue")
-            try:
-                structured_analysis = json.loads(chatgpt_analysis)
-                logger.info(f"Analyse structurée : {structured_analysis}")
-            except json.JSONDecodeError as e:
-                logger.error(f"Erreur de parsing JSON : {e}")
-                structured_analysis = {}
-            all_analyses.append(structured_analysis)
-
-        merged_analysis = merge_analyses(all_analyses)
-
-        fine_tuning_data = prepare_fine_tuning_data(results)
-        logger.info(f"Données préparées pour le fine-tuning. Nombre d'exemples : {len(fine_tuning_data)}")
-
-        jsonl_filename = "gonogo_data.jsonl"
-        save_jsonl(fine_tuning_data, jsonl_filename)
-        logger.info(f"Données sauvegardées dans {jsonl_filename}")
-
-        file_id = upload_file_for_fine_tuning(jsonl_filename)
-        if not file_id:
-            logger.error("Échec du téléchargement du fichier")
-            return {"error": "Échec du téléchargement du fichier"}
-        logger.info(f"Fichier téléchargé avec succès. ID : {file_id}")
-
-        fine_tune_id = start_fine_tuning(file_id)
-        if not fine_tune_id:
-            logger.error("Échec du démarrage du fine-tuning")
-            return {"error": "Échec du démarrage du fine-tuning"}
-        logger.info(f"Fine-tuning démarré avec succès. ID : {fine_tune_id}")
-
-        time.sleep(2)
-
-        status = client.fine_tuning.jobs.retrieve(fine_tune_id).status
-
-        word_file_path = 'chatgpt_analysis.docx'
-        create_word_document(merged_analysis, word_file_path)
-        logger.info(f"Document Word créé avec succès : {word_file_path}")
-
-        if upload_to_s3(word_file_path, f"documents/{word_file_path}"):
-            logger.info(f"Document Word uploadé vers MinIO : documents/{word_file_path}")
-        else:
-            logger.error("Échec de l'upload du document Word vers MinIO")
-
-        os.remove(jsonl_filename)
-        os.remove(word_file_path)
-        logger.info(f"Fichier temporaire {jsonl_filename} supprimé")
-        logger.info(f"Fichier temporaire {word_file_path} supprimé")
-
+        # Créer le document Word directement à partir de la réponse
+        word_document = create_word_document(chatgpt_analysis)
+        logger.info(f"Document Word créé avec succès : {word_document}")
+        
+        s3_file_path = upload_to_s3(word_document, f"analyses/{os.path.basename(word_document)}")
+        logger.info(f"Document Word uploadé vers MinIO : {s3_file_path}")
+        
+        if word_document:
+            os.remove(word_document)
+            logger.info(f"Fichier temporaire {word_document} supprimé")
+        
         return {
-            "message": f"Fine-tuning démarré avec succès. Statut actuel : {status}",
-            "fine_tune_id": fine_tune_id,
-            "chatgpt_analysis": merged_analysis,
-            "word_document": f"documents/{word_file_path}"
+            "message": "Traitement terminé avec succès",
+            "chatgpt_analysis": chatgpt_response,
+            "word_document": s3_file_path
         }
-
     except Exception as e:
-        logger.error(f"Erreur lors du traitement : {str(e)}")
+        logger.error(f"Erreur lors du traitement : {str(e)}", exc_info=True)
         return {"error": str(e)}
 
 def read_jsonl_file(file_path):
