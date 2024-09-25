@@ -3,6 +3,9 @@ import logging
 import os
 import time
 import asyncio
+import tempfile
+import uuid
+from datetime import datetime
 
 from botocore.exceptions import NoCredentialsError
 from docx import Document
@@ -82,8 +85,39 @@ async def get_chatgpt_response_async(client, chunk):
         response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Vous êtes un assistant d'analyse de documents."},
-                {"role": "user", "content": f"Analysez le contenu suivant : {chunk}"}
+                {"role": "system", "content": "Vous êtes un assistant d'analyse de documents. Veuillez structurer votre réponse selon le format suivant, en remplissant uniquement les sections pour lesquelles vous avez des informations pertinentes :"},
+                {"role": "user", "content": f"""
+                    Analysez le contenu suivant et fournissez les informations pertinentes pour chaque catégorie. Si vous n'avez pas d'information pour une catégorie, laissez-la vide.
+
+                    {chunk}
+
+                    BU :
+                    Métier / Société :
+                    Donneur d'ordres :
+                    Opportunité :
+                    Date limite de remise des offres :
+                    Début de la prestation :
+                    Délai de validité des offres :
+                    Objet du marché :
+                    Périmètre de la consultation :
+                    PSE :
+                    Formule de révision des prix :
+                    Critères d'attribution :
+                    Description des prestations :
+                    Exigences :
+                    Missions et compétences attendues :
+                    Qualités des hôtes ou hôtesses :
+                    Compétences nécessaires :
+                    Plages horaires :
+                    Formations :
+                    Forces :
+                    Faiblesses :
+                    Opportunités :
+                    Menaces :
+
+                    Assurez-vous de ne remplir que les catégories pour lesquelles vous avez des informations spécifiques et pertinentes.
+                    """
+                }
             ]
         )
         chatgpt_response = response.choices[0].message.content
@@ -96,7 +130,9 @@ async def get_chatgpt_response_async(client, chunk):
 async def process_chunks(chunks):
     client = AsyncOpenAI()
     tasks = [get_chatgpt_response_async(client, chunk) for chunk in chunks]
-    return await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks)
+    logger.info(f"Nombre de chunks traités : {len(results)}")
+    return results
 
 def upload_to_s3(local_file, s3_file):
     try:
@@ -121,49 +157,26 @@ def download_from_s3(s3_file, local_file):
         logger.error("Identifiants non valides pour accéder à S3")
         return False
 
-def create_word_document(chatgpt_analysis):
-    try:
-        doc = Document()
-        file_path = f"analyse_{int(time.time())}.docx"
+def create_word_document(merged_analysis):
+    doc = Document()
+    doc.add_heading('Analyse du document', 0)
 
-        if isinstance(chatgpt_analysis, str):
-            chatgpt_analysis = json.loads(chatgpt_analysis)
+    for key, value in merged_analysis.items():
+        if isinstance(value, dict):
+            doc.add_heading(key, level=1)
+            for sub_key, sub_value in value.items():
+                doc.add_paragraph(f"{sub_key}: {sub_value}")
+        elif isinstance(value, list):
+            doc.add_heading(key, level=1)
+            for item in value:
+                doc.add_paragraph(f"- {item}")
+        else:
+            doc.add_paragraph(f"{key}: {value}")
 
-        def add_heading(text, level):
-            heading = doc.add_heading(text, level=level)
-            heading.style.font.size = Pt(14 - level)
-
-        def add_paragraph(text):
-            p = doc.add_paragraph(text)
-            p.style.font.size = Pt(11)
-
-        def add_list(items):
-            for item in items:
-                p = doc.add_paragraph(item, style='List Bullet')
-                p.style.font.size = Pt(11)
-
-        add_heading("Analyse ChatGPT", 0)
-
-        for key, value in chatgpt_analysis.items():
-            add_heading(key, 1)
-            if isinstance(value, str):
-                add_paragraph(value)
-            elif isinstance(value, list):
-                add_list(value)
-            elif isinstance(value, dict):
-                for sub_key, sub_value in value.items():
-                    add_paragraph(f"{sub_key}:")
-                    if isinstance(sub_value, list):
-                        add_list(sub_value)
-                    else:
-                        add_paragraph(str(sub_value))
-
-        doc.save(file_path)
-        logger.info(f"Document Word créé avec succès : {file_path}")
-        return file_path
-    except Exception as e:
-        logger.error(f"Erreur lors de la création du document Word : {str(e)}")
-        raise
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
+    doc.save(temp_file.name)
+    logger.info(f"Document Word créé avec succès : {temp_file.name}")
+    return temp_file.name
 
 def split_results(results, max_tokens):
     parts = []
@@ -185,42 +198,83 @@ def split_results(results, max_tokens):
     return parts
 
 def merge_analyses(analyses):
-    merged = {key: "" for key in [
-        "BU", "Métier / Société", "Donneur d'ordres", "Opportunité",
-        "Date limite de remise des offres", "Début de la prestation",
-        "Délai de validité des offres", "Objet du marché",
-        "Périmètre de la consultation", "PSE", "Formule de révision des prix"
-    ]}
-    merged.update({key: [] for key in [
-        "Autres dates importantes", "Critères d'attribution", "Missions générales",
-        "Matériels à disposition", "Description des prestations", "Exigences",
-        "Missions et compétences attendues", "Qualités des hôtes ou hôtesses",
-        "Compétences nécessaires", "Plages horaires", "Formations",
-        "Forces", "Faiblesses", "Opportunités", "Menaces"
-    ]})
+    merged = {
+        "BU": "",
+        "Métier / Société": "",
+        "Donneur d'ordres": "",
+        "Opportunité": "",
+        "Calendrier": {
+            "Date limite de remise des offres": "",
+            "Début de la prestation": "",
+            "Délai de validité des offres": "",
+            "Autres dates importantes": []
+        },
+        "Critères d'attribution": [],
+        "Description de l'offre": {
+            "Durée": "",
+            "Synthèse Lot": "",
+            "CA TOTAL offensif": "",
+            "Missions générales": [],
+            "Matériels à disposition": []
+        },
+        "Objet du marché": "",
+        "Périmètre de la consultation": "",
+        "Description des prestations": [],
+        "Exigences": [],
+        "Missions et compétences attendues": [],
+        "Profil des hôtes ou hôtesses d'accueil": {
+            "Qualités": [],
+            "Compétences nécessaires": []
+        },
+        "Plages horaires": [],
+        "PSE": "",
+        "Formations": [],
+        "Intérêt pour le groupe": {
+            "Forces": [],
+            "Faiblesses": [],
+            "Opportunités": [],
+            "Menaces": []
+        },
+        "Formule de révision des prix": ""
+    }
 
     for analysis in analyses:
-        if isinstance(analysis, str):
-            # Traiter le texte ligne par ligne
-            for line in analysis.split('\n'):
-                for key in merged.keys():
-                    if key.lower() in line.lower():
-                        value = line.split(':', 1)[-1].strip()
-                        if isinstance(merged[key], list):
-                            merged[key].append(value)
-                        else:
+        if isinstance(analysis, dict) and "analyse" in analysis:
+            lines = analysis["analyse"].split("\n")
+            current_key = ""
+            for line in lines:
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key in merged:
+                        if isinstance(merged[key], str):
                             merged[key] = value
-        elif isinstance(analysis, dict):
-            for key, value in analysis.items():
-                if key in merged:
-                    if isinstance(merged[key], list):
-                        if isinstance(value, list):
-                            merged[key].extend(value)
-                        else:
-                            merged[key].append(value)
-                    else:
-                        merged[key] = value
+                        elif isinstance(merged[key], list):
+                            if value:
+                                merged[key].append(value)
+                    elif key in merged["Calendrier"]:
+                        merged["Calendrier"][key] = value
+                    elif key in merged["Description de l'offre"]:
+                        if isinstance(merged["Description de l'offre"][key], str):
+                            merged["Description de l'offre"][key] = value
+                        elif isinstance(merged["Description de l'offre"][key], list):
+                            if value:
+                                merged["Description de l'offre"][key].append(value)
+                    elif key in merged["Profil des hôtes ou hôtesses d'accueil"]:
+                        if value:
+                            merged["Profil des hôtes ou hôtesses d'accueil"][key].append(value)
+                    elif key in merged["Intérêt pour le groupe"]:
+                        if value:
+                            merged["Intérêt pour le groupe"][key].append(value)
+                    current_key = key
+                elif current_key and line.strip():
+                    if isinstance(merged.get(current_key), list):
+                        merged[current_key].append(line.strip())
+                    elif current_key in merged["Intérêt pour le groupe"]:
+                        merged["Intérêt pour le groupe"][current_key].append(line.strip())
 
+    logger.info(f"Résultat final de merge_analyses : {merged}")
     return merged
 
 async def process_gonogo_file(results):
@@ -241,20 +295,30 @@ async def process_gonogo_file(results):
 
         final_analysis = merge_analyses(all_analyses)
 
-        word_document = create_word_document(final_analysis)
-        logger.info(f"Document Word créé avec succès : {word_document}")
+        word_document_path = create_word_document(final_analysis)
+        logger.info(f"Document Word créé avec succès : {word_document_path}")
 
-        s3_file_path = upload_to_s3(word_document, f"analyses/{os.path.basename(word_document)}")
-        logger.info(f"Document Word uploadé vers MinIO : {s3_file_path}")
+        # Générer un nom de fichier unique
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"analyse_{timestamp}_{unique_id}.docx"
+        
+        s3_file_path = f"analyses/{filename}"
+        
+        upload_success = upload_to_s3(word_document_path, s3_file_path)
+        if upload_success:
+            logger.info(f"Document Word uploadé vers MinIO : {s3_file_path}")
+        else:
+            logger.error(f"Échec de l'upload du document Word vers MinIO")
 
-        if word_document:
-            os.remove(word_document)
-            logger.info(f"Fichier temporaire {word_document} supprimé")
+        if word_document_path:
+            os.remove(word_document_path)
+            logger.info(f"Fichier temporaire {word_document_path} supprimé")
 
         return {
             "message": "Traitement terminé avec succès",
             "chatgpt_analysis": final_analysis,
-            "word_document": s3_file_path
+            "word_document": upload_success
         }
     except Exception as e:
         logger.error(f"Erreur lors du traitement : {str(e)}", exc_info=True)

@@ -36,6 +36,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+s3_bucket = "jobpilot"
+
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
@@ -43,7 +45,7 @@ def read_root():
 @app.post("/read-file")
 async def match(zip_file: UploadFile = File(...)):
     logger.info(f"Réception d'un fichier : {zip_file.filename}")
-    s3_bucket = "jobpilot"
+
     results_file_key = f"results/{zip_file.filename}.json"
 
     try:
@@ -75,17 +77,29 @@ async def download_document(file_path: str):
         raise HTTPException(status_code=400, detail="Chemin de fichier manquant")
     
     try:
+        s3_client = get_s3_client()
+        
+        logging.info(f"Tentative de téléchargement du fichier: {file_path} depuis le bucket: {s3_bucket}")
+        
         response = s3_client.get_object(Bucket=s3_bucket, Key=file_path)
+        
+        logging.info(f"Fichier trouvé, taille: {response['ContentLength']} bytes")
+        
         return StreamingResponse(
             response['Body'].iter_chunks(),
-            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            headers={"Content-Disposition": f"attachment; filename={file_path}"}
+            media_type=response.get('ContentType', 'application/octet-stream'),
+            headers={"Content-Disposition": f"attachment; filename={os.path.basename(file_path)}"}
         )
-    except NoSuchKey:
-        raise HTTPException(status_code=404, detail="Fichier non trouvé")
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            logging.warning(f"Fichier non trouvé: {file_path}")
+            raise HTTPException(status_code=404, detail="Fichier non trouvé")
+        else:
+            logging.error(f"Erreur lors du téléchargement du fichier : {str(e)}")
+            raise HTTPException(status_code=500, detail="Erreur lors du téléchargement du fichier")
     except Exception as e:
-        logger.error(f"Erreur lors du téléchargement du fichier : {str(e)}")
-        raise HTTPException(status_code=500, detail="Erreur lors du téléchargement du fichier")
+        logging.error(f"Erreur inattendue lors du téléchargement du fichier : {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur inattendue lors du téléchargement du fichier")
 
 def process_zip_from_s3(bucket, key):
     s3_client = get_s3_client()
