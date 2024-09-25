@@ -185,70 +185,41 @@ def split_results(results, max_tokens):
     return parts
 
 def merge_analyses(analyses):
-    merged = {
-        "BU": "",
-        "Métier / Société": "",
-        "Donneur d'ordres": "",
-        "Opportunité": "",
-        "Calendrier": {
-            "Date limite de remise des offres": "",
-            "Début de la prestation": "",
-            "Délai de validité des offres": "",
-            "Autres dates importantes": []
-        },
-        "Critères d'attribution": [],
-        "Description de l'offre": {
-            "Durée": "",
-            "Synthèse Lot": "",
-            "CA TOTAL offensif": "",
-            "Missions générales": [],
-            "Matériels à disposition": []
-        },
-        "Objet du marché": "",
-        "Périmètre de la consultation": "",
-        "Description des prestations": [],
-        "Exigences": [],
-        "Missions et compétences attendues": [],
-        "Profil des hôtes ou hôtesses d'accueil": {
-            "Qualités": [],
-            "Compétences nécessaires": []
-        },
-        "Plages horaires": [],
-        "PSE": "",
-        "Formations": [],
-        "Intérêt pour le groupe": {
-            "Forces": [],
-            "Faiblesses": [],
-            "Opportunités": [],
-            "Menaces": []
-        },
-        "Formule de révision des prix": ""
-    }
+    merged = {key: "" for key in [
+        "BU", "Métier / Société", "Donneur d'ordres", "Opportunité",
+        "Date limite de remise des offres", "Début de la prestation",
+        "Délai de validité des offres", "Objet du marché",
+        "Périmètre de la consultation", "PSE", "Formule de révision des prix"
+    ]}
+    merged.update({key: [] for key in [
+        "Autres dates importantes", "Critères d'attribution", "Missions générales",
+        "Matériels à disposition", "Description des prestations", "Exigences",
+        "Missions et compétences attendues", "Qualités des hôtes ou hôtesses",
+        "Compétences nécessaires", "Plages horaires", "Formations",
+        "Forces", "Faiblesses", "Opportunités", "Menaces"
+    ]})
 
     for analysis in analyses:
         if isinstance(analysis, str):
-            try:
-                analysis_dict = json.loads(analysis)
-            except json.JSONDecodeError:
-                logger.warning(f"Impossible de décoder l'analyse JSON : {analysis}")
-                continue
+            # Traiter le texte ligne par ligne
+            for line in analysis.split('\n'):
+                for key in merged.keys():
+                    if key.lower() in line.lower():
+                        value = line.split(':', 1)[-1].strip()
+                        if isinstance(merged[key], list):
+                            merged[key].append(value)
+                        else:
+                            merged[key] = value
         elif isinstance(analysis, dict):
-            analysis_dict = analysis
-        else:
-            logger.warning(f"Type d'analyse inattendu : {type(analysis)}")
-            continue
-
-        for key, value in analysis_dict.items():
-            if isinstance(value, list):
-                merged[key].extend(value)
-            elif isinstance(value, dict):
-                for sub_key, sub_value in value.items():
-                    if isinstance(sub_value, list):
-                        merged[key][sub_key].extend(sub_value)
+            for key, value in analysis.items():
+                if key in merged:
+                    if isinstance(merged[key], list):
+                        if isinstance(value, list):
+                            merged[key].extend(value)
+                        else:
+                            merged[key].append(value)
                     else:
-                        merged[key][sub_key] = sub_value
-            else:
-                merged[key] = value
+                        merged[key] = value
 
     return merged
 
