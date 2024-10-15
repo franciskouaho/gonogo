@@ -47,42 +47,41 @@ def split_text_into_chunks(text, max_tokens=1500):
         yield " ".join(words[i:i + max_tokens])
 
 def analyze_content_with_gpt(client, file_name: str, content: str):
-    if "rc" in file_name:
+    if "rc" in file_name.lower() or "ae" in file_name.lower():
         prompt = (
-            f"Please extract the following information from the provided content:\n"
-            f"- Objet du marché\n"
-            f"- Périmètre géographique\n"
-            f"- Nombre de lots\n"
-            f"- Chiffre d'affaires (CA)\n"
-            f"- Calendrier (including: Date limite de remise des offres, Date de remise d’offre, "
-            f"Date de démarrage, Durée du marché)\n"
-            f"- Critères d’attribution (including: Références, Organisation de l’agence, "
-            f"Moyens humains, Moyens techniques, Certificats et agréments).\n\n"
-            f"Content:\n"
+            f"Veuillez extraire les informations suivantes du contenu fourni :\n"
+            f"- Calendrier des dates clés (Date limite de remise des offres, Invitation à soumissionner, "
+            f"Remise des livrables, Démarrage, Durée du marché, Notification, etc.).\n"
+            f"- Critères d'attribution (Références, Organisation de l'agence, Moyens humains, Moyens techniques, "
+            f"Certificat et agrément), avec pourcentages si disponibles.\n"
+            f"- Informations sur le démarrage des prestations, problèmes potentiels et formations requises.\n\n"
+            f"Contenu :\n"
         )
     elif "ccap" in file_name:
         prompt = (
-            f"Extract the following information from this content:\n"
+            f"Veuillez extraire les informations suivantes de ce contenu :\n"
             f"Prix du marché, prestations attendues, tranches et options, prestations supplémentaires, "
             f"durée du marché, équipes (responsable d’équipe, chef d’équipe), formations, "
-            f"pricing revisions, payment terms, penalties, quality assurance, RSE, "
-            f"reexamination clause for equipment modifications.\n\nContent:\n"
+            f"révisions de prix, conditions de paiement, pénalités, qualité, "
+            f"formule de révision (exemple : P = Po x [0,2 + 0,8 Im-4 / I0-4]), "
+            f"RSE, clause de réexamen pour modifications d'équipement.\n"
+            f"Ne pas inventer de données ou faire d'hypothèses, mais se limiter à ce qui est écrit.\n\nContenu :\n"
         )
     elif "cctp" in file_name:
         prompt = (
-            f"Extract the following information from this content:\n"
-            f"Périmètre géographique (location), horaires d’ouvertures, missions, prestations attendues, "
-            f"types of formations, team composition, PSE, equipment to be provided, penalties, "
-            f"and any details related to operational processes.\n\nContent:\n"
+            f"Veuillez extraire les informations suivantes de ce contenu :\n"
+            f"Périmètre géographique (localisation), horaires d'ouvertures, missions, prestations attendues, "
+            f"composition des équipes, équipements à fournir, PSE, pénalités, "
+            f"et tout détail lié aux processus opérationnels.\n\nContenu :\n"
         )
     elif "bpu" in file_name:
         prompt = (
-            f"Extract the following information from this content:\n"
-            f"Number of agents, CDI, CDD, and any other staffing details.\n\nContent:\n"
+            f"Veuillez extraire les informations suivantes de ce contenu :\n"
+            f"Nombre d'agents, CDI, CDD, et tous autres détails sur le personnel.\n\nContenu :\n"
         )
     else:
         logger.info(f"File '{file_name}' did not match any known types. Skipping.")
-        return {"filename": file_name, "info": "File type not recognized for extraction."}
+        return {"filename": file_name, "info": "Type de fichier non reconnu pour l'extraction."}
 
     results = []
     try:
@@ -90,7 +89,7 @@ def analyze_content_with_gpt(client, file_name: str, content: str):
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a document analyzer."},
+                    {"role": "system", "content": "Vous êtes un analyseur de documents."},
                     {"role": "user", "content": prompt + chunk}
                 ],
                 max_tokens=1000,
