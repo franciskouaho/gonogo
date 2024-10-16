@@ -34,6 +34,40 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
+# def create_pdf(results, output_filename='summary.pdf'):
+#     """Creates a PDF file summarizing the extracted information."""
+#     c = canvas.Canvas(output_filename, pagesize=letter)
+#     width, height = letter
+#
+#     c.setFont("Helvetica-Bold", 16)
+#     c.drawString(100, height - 50, "Résumé des informations extraites")
+#
+#     y_position = height - 100
+#     c.setFont("Helvetica", 12)
+#
+#     for result in results:
+#         c.drawString(100, y_position, f"Fichier: {result['filename']}")
+#         y_position -= 20
+#
+#         if result["info"]:
+#             for line in result["info"].split('\n'):
+#                 if line.strip():
+#                     c.drawString(120, y_position, line)
+#                     y_position -= 20
+#         else:
+#             c.drawString(120, y_position, "Aucune information trouvée.")
+#             y_position -= 20
+#
+#         y_position -= 10
+#
+#         if y_position < 40:
+#             c.showPage()
+#             y_position = height - 100
+#
+#     c.save()
+#     logger.info(f"PDF créé avec succès: {output_filename}")
+
 def extract_text_from_pdf(pdf_content):
     text = ""
     with pdfplumber.open(BytesIO(pdf_content)) as pdf:
@@ -47,7 +81,7 @@ def split_text_into_chunks(text, max_tokens=1500):
         yield " ".join(words[i:i + max_tokens])
 
 def analyze_content_with_gpt(client, file_name: str, content: str):
-    if "rc" in file_name.lower() or "ae" in file_name.lower():
+    if "rc" in file_name.lower() or "ae" in file_name.lower() or "Reglement de la consultation" in file_name.lower():
         prompt = (
             f"Veuillez extraire les informations suivantes du contenu fourni :\n"
             f"- Calendrier des dates clés (Date limite de remise des offres, Invitation à soumissionner, "
@@ -63,7 +97,7 @@ def analyze_content_with_gpt(client, file_name: str, content: str):
             f"Prix du marché, prestations attendues, tranches et options, prestations supplémentaires, "
             f"durée du marché, équipes (responsable d’équipe, chef d’équipe), formations, "
             f"révisions de prix, conditions de paiement, pénalités, qualité, "
-            f"formule de révision (exemple : P = Po x [0,2 + 0,8 Im-4 / I0-4]), "
+            f"formule de révision commencant par P =  , prend le exactement comme c'est ecrit et donne les definitions si sa figure sur le document, "
             f"RSE, clause de réexamen pour modifications d'équipement.\n"
             f"Ne pas inventer de données ou faire d'hypothèses, mais se limiter à ce qui est écrit.\n\nContenu :\n"
         )
@@ -104,6 +138,80 @@ def analyze_content_with_gpt(client, file_name: str, content: str):
     except Exception as e:
         logger.error(f"Error extracting information with GPT for file '{file_name}': {e}")
         return {"filename": file_name, "info": "Error during GPT analysis."}
+
+def analyze_final_file (client, final_filename) :
+    prompt = (
+        f"Récupere tout les informations pour l'ecrire en un fichier sans doublons en gardant tout les informations que tu as trouvé voici l'architecture  :\n"
+    )
+
+    context_string = """
+    CONTEXTE :
+
+    Objet du marché :
+    Marché Offensif
+    Prestataire en place
+    Autres concurrents identifiés
+    Calendrier
+
+    CONTEXTE ET ATTENTES :
+
+    Principales attentes
+    Intérêt stratégique pour ONET
+    Contexte
+    Critères d’attribution sur la technique
+
+    RISQUES D'EXPLOITATION :
+
+    Démarrage
+    Exploitation courante
+
+    RISQUES CDC :
+
+    Points d’attention
+    Pénalités
+    Délais de paiement
+    Préconisation d’une visite par QSE et Formation (MT : Sensibilisation prev des risques et causeries)
+    Profils des SSIAPs (rém hors grille afin de limiter le turn over + exigences fortes du client)
+    Assurances + contrat (retour SJ)
+
+    CADRE CONTRACTUEL :
+
+    Révision des prix
+    Pénalités
+    Système de RFA
+    Délai de paiement
+    Pénalités
+
+    CADRE TARIFAIRE :
+
+    Masse salariale
+    Aléas d’exploitation
+    Formations
+    Matériels à fournir
+    Tenues et équipements
+    Sous-traitance
+    Commande sup.
+    Commande sup.
+
+    POSITIONNEMENT SALARIAL
+    
+    """
+
+    prompt2 = (
+        f"voici le contenu en question :\n"
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Vous êtes un analyseur de documents."},
+            {"role": "user", "content": prompt + context_string + prompt2 + final_filename}
+        ],
+        max_tokens=1000,
+        temperature=0.5
+    )
+
+    return response.choices[0].message.content
 
 @app.post("/read-file")
 async def match(zip_file: UploadFile = File(...)):
@@ -158,12 +266,17 @@ async def match(zip_file: UploadFile = File(...)):
                     unrecognized_files.append(file_name)
 
     results = []
+    final_results = ""
+
     for file in processed_files:
         file_name = file["filename"].lower()
         file_content = extract_text_from_pdf(file["content"])
 
         analysis_result = analyze_content_with_gpt(client,file_name, file_content)
         results.append(analysis_result)
+
+        final_results += analysis_result["info"] + "\n"
+
 
     if missing_info_files:
         missing_info_message = (
@@ -179,9 +292,14 @@ async def match(zip_file: UploadFile = File(...)):
     else:
         unrecognized_files_message = "All files were recognized for extraction."
 
+    final_results = analyze_final_file(client, final_results)
+
+    # create_pdf([{"filename": "Processed Results", "info": final_results.strip()}])
+
     return {
         "message": f"{len(results)} files processed and analyzed.",
         "results": results,
         "missing_info_message": missing_info_message,
-        "unrecognized_files_message": unrecognized_files_message
+        "unrecognized_files_message": unrecognized_files_message,
+        "final_results": final_results
     }
