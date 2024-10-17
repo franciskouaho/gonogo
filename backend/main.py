@@ -200,6 +200,8 @@ def analyze_final_file (client, final_filename) :
 
     prompt2 = (
         f"\nVoici le fichier en question : {final_filename}.\nVérifie chaque catégorie ci-dessus, assure-toi qu'aucune information n'est omise et attribue une priorité de 1 pour les informations spécifiées et 0 pour celles non spécifiées. Toute information absente ou de priorité 0 doit être mentionnée comme 'non spécifiée'.\n"
+        f" N'écrit rien d'autre que ce qui est demandé. Ne dit pas ce qu'il manque ou une phrase d'introduction pour dire voici les informations fournis. \n\n"
+
     )
     response = client.chat.completions.create(
         model="gpt-4o-mini",
