@@ -31,42 +31,7 @@ app.add_middleware(
 
 load_dotenv()
 
-
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
-# def create_pdf(results, output_filename='summary.pdf'):
-#     """Creates a PDF file summarizing the extracted information."""
-#     c = canvas.Canvas(output_filename, pagesize=letter)
-#     width, height = letter
-#
-#     c.setFont("Helvetica-Bold", 16)
-#     c.drawString(100, height - 50, "Résumé des informations extraites")
-#
-#     y_position = height - 100
-#     c.setFont("Helvetica", 12)
-#
-#     for result in results:
-#         c.drawString(100, y_position, f"Fichier: {result['filename']}")
-#         y_position -= 20
-#
-#         if result["info"]:
-#             for line in result["info"].split('\n'):
-#                 if line.strip():
-#                     c.drawString(120, y_position, line)
-#                     y_position -= 20
-#         else:
-#             c.drawString(120, y_position, "Aucune information trouvée.")
-#             y_position -= 20
-#
-#         y_position -= 10
-#
-#         if y_position < 40:
-#             c.showPage()
-#             y_position = height - 100
-#
-#     c.save()
-#     logger.info(f"PDF créé avec succès: {output_filename}")
 
 def extract_text_from_pdf(pdf_content):
     text = ""
@@ -80,7 +45,13 @@ def split_text_into_chunks(text, max_tokens=1500):
     for i in range(0, len(words), max_tokens):
         yield " ".join(words[i:i + max_tokens])
 
-def analyze_content_with_gpt(client, file_name: str, content: str):
+def analyze_content_with_gpt(client, file_name: str, content: str, variables: dict):
+    """
+    Analyse the content of a document and fills the corresponding variables.
+    Variables will not be overwritten by empty values.
+    """
+
+    # Prompts based on the document type
     if "rc" in file_name.lower() or "ae" in file_name.lower() or "Reglement de la consultation" in file_name.lower():
         prompt = (
             f"Veuillez extraire les informations suivantes du contenu fourni :\n"
@@ -89,29 +60,34 @@ def analyze_content_with_gpt(client, file_name: str, content: str):
             f"- Critères d'attribution (Références, Organisation de l'agence, Moyens humains, Moyens techniques, "
             f"Certificat et agrément), avec pourcentages si disponibles.\n"
             f"- Informations sur le démarrage des prestations, problèmes potentiels et formations requises.\n\n"
-            f"Contenu :\n"
+            f"Ne remplacez jamais les informations existantes par une valeur vide. Laissez une information vide si elle n'est pas présente."
         )
     elif "ccap" in file_name:
         prompt = (
             f"Veuillez extraire les informations suivantes de ce contenu :\n"
             f"Prix du marché, prestations attendues, tranches et options, prestations supplémentaires, "
             f"durée du marché, équipes (responsable d’équipe, chef d’équipe), formations, "
+            f"Veuillez extraire **toutes** les pénalités mentionnées, même si elles apparaissent à plusieurs endroits. Retournez-les comme une liste séparée par des points.\n"
             f"révisions de prix, conditions de paiement, pénalités, qualité, "
-            f"formule de révision commencant par P =  , prend le exactement comme c'est ecrit et donne les definitions si sa figure sur le document, "
+
+            f"formule de révision commençant par P =  , prenez-la exactement comme c'est écrit et donnez les définitions si elles sont présentes dans le document, "
             f"RSE, clause de réexamen pour modifications d'équipement.\n"
-            f"Ne pas inventer de données ou faire d'hypothèses, mais se limiter à ce qui est écrit.\n\nContenu :\n"
+            f"Ne remplacez jamais les informations existantes par une valeur vide."
         )
     elif "cctp" in file_name:
         prompt = (
             f"Veuillez extraire les informations suivantes de ce contenu :\n"
             f"Périmètre géographique (localisation), horaires d'ouvertures, missions, prestations attendues, "
+            f"Veuillez extraire **toutes** les pénalités mentionnées, même si elles apparaissent à plusieurs endroits. Retournez-les comme une liste séparée par des points.\n"
             f"composition des équipes, équipements à fournir, PSE, pénalités, "
-            f"et tout détail lié aux processus opérationnels.\n\nContenu :\n"
+            f"et tout détail lié aux processus opérationnels.\n\n"
+            f"Ne remplacez jamais les informations existantes par une valeur vide."
         )
     elif "bpu" in file_name:
         prompt = (
             f"Veuillez extraire les informations suivantes de ce contenu :\n"
-            f"Nombre d'agents, CDI, CDD, et tous autres détails sur le personnel.\n\nContenu :\n"
+            f"Nombre d'agents, CDI, CDD, et tous autres détails sur le personnel.\n\n"
+            f"Ne remplacez jamais les informations existantes par une valeur vide."
         )
     else:
         logger.info(f"File '{file_name}' did not match any known types. Skipping.")
@@ -132,88 +108,79 @@ def analyze_content_with_gpt(client, file_name: str, content: str):
             gpt_summary = response.choices[0].message.content
             results.append(gpt_summary)
 
-        print(f"Results for file '{file_name}':", " ".join(results))
-
         return {"filename": file_name, "info": " ".join(results)}
     except Exception as e:
         logger.error(f"Error extracting information with GPT for file '{file_name}': {e}")
         return {"filename": file_name, "info": "Error during GPT analysis."}
 
-def analyze_final_file (client, final_filename) :
-    prompt = (
-        f"Récupère toutes les informations et rédige un fichier complet, en évitant les doublons. **Aucune information ne doit être omise**, même si elle est partiellement présente. Suis l'architecture suivante et inclus chaque catégorie de manière exhaustive. "
-        f"Chaque information possède une priorité implicite : si elle est spécifiée, elle a une priorité de 1, si elle est non specifiée ou vide une priorité de 0. Les informations avec une priorité de 1 doivent être traitées en premier, et les informations avec une priorité de 0 peuvent être mentionnées comme absentes ou non spécifiées si elles ne sont pas disponibles.\n\n"
-        f"Par exemple si dans un fichier on trouve les dates de calendriers mais pas dans l'autre on garde l'information qui détient la date. \n\n"
-    )
-    context_string = """
-    CONTEXTE :
-
-    Objet du marché :
-    Marché Offensif
-    Prestataire en place
-    Autres concurrents identifiés
-    Calendrier
-
-    CONTEXTE ET ATTENTES :
-
-    Principales attentes
-    Intérêt stratégique pour ONET
-    Contexte
-    Critères d’attribution sur la technique
-
-    RISQUES D'EXPLOITATION :
-
-    Démarrage
-    Exploitation courante
-
-    RISQUES CDC :
-
-    Points d’attention
-    Pénalités
-    Délais de paiement
-    Préconisation d’une visite par QSE et Formation (MT : Sensibilisation prev des risques et causeries)
-    Profils des SSIAPs (rém hors grille afin de limiter le turn over + exigences fortes du client)
-    Assurances + contrat (retour SJ)
-
-    CADRE CONTRACTUEL :
-
-    Révision des prix
-    Pénalités
-    Système de RFA
-    Délai de paiement
-    Pénalités
-
-    CADRE TARIFAIRE :
-
-    Masse salariale
-    Aléas d’exploitation
-    Formations
-    Matériels à fournir
-    Tenues et équipements
-    Sous-traitance
-    Commande sup.
-    Commande sup.
-
-    POSITIONNEMENT SALARIAL
-    
+def analyze_final_file(client, final_content, variables):
+    """
+    Final analysis that fills out the pre-collected variables.
     """
 
-    prompt2 = (
-        f"\nVoici le fichier en question : {final_filename}.\nVérifie chaque catégorie ci-dessus, assure-toi qu'aucune information n'est omise et attribue une priorité de 1 pour les informations spécifiées et 0 pour celles non spécifiées. Toute information absente ou de priorité 0 doit être mentionnée comme 'non spécifiée'.\n"
-        f" N'écrit rien d'autre que ce qui est demandé. Ne dit pas ce qu'il manque ou une phrase d'introduction pour dire voici les informations fournis. \n\n"
+    prompt = (
+        "Vous êtes un expert en analyse de documents. Votre tâche est d'extraire **toutes** les informations du contenu fourni, en évitant les doublons et en n'omettant **aucune** donnée, même si elle est partiellement présente. "
+        "Ne remplacez jamais une information préalablement collectée par une valeur vide. Si une information est absente, laissez la case vide. "
+        "Suivez strictement l'architecture suivante et remplissez chaque catégorie de manière exhaustive. "
+        "Si une information est spécifiée, elle a une priorité de 1 ; si elle est absente ou non spécifiée, elle a une priorité de 0. En cas de conflit entre deux informations (par exemple, 'non spécifié' et une valeur), choisissez toujours l'information avec la priorité de 1. "
+        "Si une information est absente, laissez-la vide.\n"
+        "Voici l'architecture à suivre :\n"
 
+        "CONTEXTE :\n"
+        "- Objet du marché :\n"
+        "- Prestataire en place :\n"
+        "- Autres concurrents identifiés :\n"
+        "- Calendrier :\n"
+
+        "CONTEXTE ET ATTENTES :\n"
+        "- Principales attentes :\n"
+        "- Intérêt stratégique pour ONET :\n"
+        "- Contexte :\n"
+        "- Critères d’attribution sur la technique :\n"
+
+        "RISQUES D'EXPLOITATION :\n"
+        "- Démarrage :\n"
+        "- Exploitation courante :\n"
+
+        "RISQUES CDC :\n"
+        "- Points d’attention :\n"
+        "- Pénalités :\n"
+        "- Délais de paiement :\n"
+        "- Préconisation d’une visite par QSE et Formation (MT : Sensibilisation prévention des risques et causeries) :\n"
+        "- Profils des SSIAPs (rémunération hors grille afin de limiter le turnover + exigences fortes du client) :\n"
+        "- Assurances + contrat :\n"
+
+        "CADRE CONTRACTUEL :\n"
+        "- Révision des prix :\n"
+        "- Pénalités :\n"
+        "- Système de RFA :\n"
+        "- Délai de paiement :\n"
+
+        "CADRE TARIFAIRE :\n"
+        "- Masse salariale :\n"
+        "- Aléas d’exploitation :\n"
+        "- Formations :\n"
+        "- Matériels à fournir :\n"
+        "- Tenues et équipements :\n"
+        "- Sous-traitance :\n"
+        "- Commandes supplémentaires :\n"
+
+        "POSITIONNEMENT SALARIAL :\n"
+        "Remplissez chaque section avec les informations collectées sans écraser les informations existantes. Laissez vides les champs où aucune information n'a été trouvée."
     )
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "Vous êtes un analyseur de documents."},
-            {"role": "user", "content": prompt + context_string + prompt2 + final_filename}
+            {"role": "system", "content": "Vous êtes un expert en analyse de documents. Suivez strictement les instructions fournies."},
+            {"role": "user", "content": prompt + final_content}
         ],
-        max_tokens=1000,
+        max_tokens=1500,
         temperature=0.5
     )
 
     return response.choices[0].message.content
+
 
 @app.post("/read-file")
 async def match(zip_file: UploadFile = File(...)):
@@ -224,6 +191,61 @@ async def match(zip_file: UploadFile = File(...)):
     processed_files = []
     missing_info_files = []
     unrecognized_files = []
+
+    variables = {
+        # CONTEXTE
+        "objet_du_marché": "",
+        "prestataire_en_place": "",
+        "autres_concurrents_identifiés": "",
+        "calendrier_date_limite_remise_offres": "",
+        "calendrier_invitation_soumissionner": "",
+        "calendrier_remise_livrables": "",
+        "calendrier_démarrage": "",
+        "calendrier_durée_marché": "",
+        "calendrier_notification": "",
+
+        # CONTEXTE ET ATTENTES
+        "principales_attentes": "",
+        "intérêt_stratégique_pour_ONET": "",
+        "contexte": "",
+        "critères_attribution_références": "",
+        "critères_attribution_organisation_agence": "",
+        "critères_attribution_moyens_humains": "",
+        "critères_attribution_moyens_techniques": "",
+        "critères_attribution_certificat_et_agrément": "",
+
+        # RISQUES D'EXPLOITATION
+        "risques_exploitation_démarrage": "",
+        "risques_exploitation_courante": "",
+
+        # RISQUES CDC
+        "points_attention": [],
+        "pénalités": [],  # Liste pour accumuler plusieurs pénalités
+        "délais_de_paiement": [],
+        "préconisation_visite_qse_formation": [],
+        "profils_ssiaps": "",
+        "assurances_contrat": [],
+
+        # CADRE CONTRACTUEL
+        "révision_des_prix": "",
+        "cadre_pénalités": [],
+        "système_rfa": "",
+        "cadre_délais_de_paiement": "",
+
+        # CADRE TARIFAIRE
+        "masse_salariale": "",
+        "aléas_exploitation": "",
+        "cadre_formations": [],
+        "matériels_fournir": [],
+        "tenues_et_équipements": [],
+        "sous_traitance": [],
+        "commandes_supplémentaires_1": "",
+        "commandes_supplémentaires_2": "",
+
+        # POSITIONNEMENT SALARIAL
+        "positionnement_salarial": ""
+    }
+
 
     with zipfile.ZipFile(zip_content, 'r') as z:
         file_list = z.namelist()
@@ -274,11 +296,10 @@ async def match(zip_file: UploadFile = File(...)):
         file_name = file["filename"].lower()
         file_content = extract_text_from_pdf(file["content"])
 
-        analysis_result = analyze_content_with_gpt(client,file_name, file_content)
+        analysis_result = analyze_content_with_gpt(client, file_name, file_content, variables)
         results.append(analysis_result)
 
         final_results += analysis_result["info"] + "\n"
-
 
     if missing_info_files:
         missing_info_message = (
@@ -294,7 +315,7 @@ async def match(zip_file: UploadFile = File(...)):
     else:
         unrecognized_files_message = "All files were recognized for extraction."
 
-    final_results = analyze_final_file(client, final_results)
+    final_results = analyze_final_file(client, final_results, variables)
 
     # create_pdf([{"filename": "Processed Results", "info": final_results.strip()}])
 
