@@ -141,9 +141,10 @@ def analyze_content_with_gpt(client, file_name: str, content: str):
 
 def analyze_final_file (client, final_filename) :
     prompt = (
-        f"Récupere tout les informations pour l'ecrire en un fichier sans doublons en gardant tout les informations que tu as trouvé voici l'architecture  :\n"
+        f"Récupère toutes les informations et rédige un fichier complet, en évitant les doublons. **Aucune information ne doit être omise**, même si elle est partiellement présente. Suis l'architecture suivante et inclus chaque catégorie de manière exhaustive. "
+        f"Chaque information possède une priorité implicite : si elle est spécifiée, elle a une priorité de 1, si elle est non specifiée ou vide une priorité de 0. Les informations avec une priorité de 1 doivent être traitées en premier, et les informations avec une priorité de 0 peuvent être mentionnées comme absentes ou non spécifiées si elles ne sont pas disponibles.\n\n"
+        f"Par exemple si dans un fichier on trouve les dates de calendriers mais pas dans l'autre on garde l'information qui détient la date. \n\n"
     )
-
     context_string = """
     CONTEXTE :
 
@@ -198,9 +199,8 @@ def analyze_final_file (client, final_filename) :
     """
 
     prompt2 = (
-        f"voici le contenu en question :\n"
+        f"\nVoici le fichier en question : {final_filename}.\nVérifie chaque catégorie ci-dessus, assure-toi qu'aucune information n'est omise et attribue une priorité de 1 pour les informations spécifiées et 0 pour celles non spécifiées. Toute information absente ou de priorité 0 doit être mentionnée comme 'non spécifiée'.\n"
     )
-
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
