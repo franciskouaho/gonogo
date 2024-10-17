@@ -13,6 +13,7 @@ interface FileResult {
 const Home: FunctionComponent = () => {
     const [file, setFile] = useState<File | null>(null);
     const [results, setResults] = useState<FileResult[]>([]);
+    const [finalResults, setFinalResults] = useState<string>("");
     const [showDownloadButton, setShowDownloadButton] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +34,8 @@ const Home: FunctionComponent = () => {
         },
         onSuccess: (data) => {
             console.log("Réponse complète:", data);
-            setResults(data.results);  // Stocke les résultats pour chaque fichier
+            setResults(data.results);
+            setFinalResults(data.final_results);  // Store final result
             setShowDownloadButton(true);
             setIsLoading(false);
         },
@@ -132,6 +134,13 @@ const Home: FunctionComponent = () => {
                     {results.map((result) => renderResult(result))}
                 </div>
             )}
+
+            <div className="mt-8 w-full max-w-4xl">
+    <h3 className="text-lg font-semibold mb-4">Résumé Final de l'analyse</h3>
+    <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
+        {finalResults}
+    </pre>
+</div>
         </section>
     );
 };
