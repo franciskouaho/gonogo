@@ -115,16 +115,23 @@ def analyze_content_with_gpt(client, file_name: str, content: str, variables: di
 
 def analyze_final_file(client, final_content, variables):
     """
-    Final analysis that fills out the pre-collected variables.
+    Final analysis that fills out the pre-collected variables with all information, including lists and multiple points.
     """
 
     prompt = (
-        "Vous êtes un expert en analyse de documents. Votre tâche est d'extraire **toutes** les informations du contenu fourni, en évitant les doublons et en n'omettant **aucune** donnée, même si elle est partiellement présente. "
-        "Ne remplacez jamais une information préalablement collectée par une valeur vide. Si une information est absente, laissez la case vide. "
-        "Suivez strictement l'architecture suivante et remplissez chaque catégorie de manière exhaustive. "
-        "Si une information est spécifiée, elle a une priorité de 1 ; si elle est absente ou non spécifiée, elle a une priorité de 0. En cas de conflit entre deux informations (par exemple, 'non spécifié' et une valeur), choisissez toujours l'information avec la priorité de 1. "
-        "Si une information est absente, laissez-la vide.\n"
-        "Voici l'architecture à suivre :\n"
+        "Vous êtes un expert en analyse de documents. Votre tâche est d'extraire **toutes** les informations du contenu fourni sans les résumer, en capturant **chaque détail**, y compris les éléments multiples, les listes à puces, ou les informations répétées. "
+        "Ne combinez, ne résumez, ni n'ignorez aucune donnée. Chaque élément doit être restitué tel quel, même s'il y a des répétitions ou des informations similaires dans plusieurs sections.\n\n"
+
+        "### Instructions strictes :\n"
+        "- **Aucun résumé**. Chaque élément doit être copié exactement comme il apparaît dans le document.\n"
+        "- Si plusieurs éléments existent dans une catégorie (par exemple, plusieurs pénalités), **listez-les tous**, un par un, en veillant à ne **pas combiner** les informations.\n"
+        "- Ne réécrivez pas les informations et ne reformulez pas. Copiez chaque élément de texte tel qu'il est.\n"
+        "- Pour les sections longues (comme les pénalités), **n'ignorez rien** même s'il y a plus de 10 éléments. Divisez la réponse en plusieurs parties si nécessaire.\n"
+        "- Ne remplacez jamais une information existante par une valeur vide.\n"
+        "- Si une information est absente, laissez-la vide.\n"
+        "- **Utilisez des listes** pour les sections qui contiennent plusieurs éléments (comme les pénalités, conditions de paiement, etc.).\n\n"
+
+        "### Architecture à respecter :\n"
 
         "CONTEXTE :\n"
         "- Objet du marché :\n"
@@ -144,7 +151,7 @@ def analyze_final_file(client, final_content, variables):
 
         "RISQUES CDC :\n"
         "- Points d’attention :\n"
-        "- Pénalités :\n"
+        "- Pénalités : (Notez **toutes** les pénalités, même si elles sont répétées ou listées à différents endroits. Copiez chaque pénalité une par une sans en ignorer aucune.)\n"
         "- Délais de paiement :\n"
         "- Préconisation d’une visite par QSE et Formation (MT : Sensibilisation prévention des risques et causeries) :\n"
         "- Profils des SSIAPs (rémunération hors grille afin de limiter le turnover + exigences fortes du client) :\n"
@@ -152,7 +159,7 @@ def analyze_final_file(client, final_content, variables):
 
         "CADRE CONTRACTUEL :\n"
         "- Révision des prix :\n"
-        "- Pénalités :\n"
+        "- Pénalités : (Copiez **chaque** pénalité, ligne par ligne. Si la liste est trop longue, divisez-la et continuez à lister jusqu'à ce que tout soit capturé)\n"
         "- Système de RFA :\n"
         "- Délai de paiement :\n"
 
@@ -166,7 +173,8 @@ def analyze_final_file(client, final_content, variables):
         "- Commandes supplémentaires :\n"
 
         "POSITIONNEMENT SALARIAL :\n"
-        "Remplissez chaque section avec les informations collectées sans écraser les informations existantes. Laissez vides les champs où aucune information n'a été trouvée."
+
+        "Remplissez chaque section avec **toutes** les informations collectées sans écraser les informations existantes. Ne laissez aucune information de côté et laissez vides les sections sans information."
     )
 
     response = client.chat.completions.create(
@@ -175,11 +183,12 @@ def analyze_final_file(client, final_content, variables):
             {"role": "system", "content": "Vous êtes un expert en analyse de documents. Suivez strictement les instructions fournies."},
             {"role": "user", "content": prompt + final_content}
         ],
-        max_tokens=1500,
+        max_tokens=2000,  # Augmenter la limite de tokens pour capturer plus d'informations si nécessaire
         temperature=0.5
     )
 
     return response.choices[0].message.content
+
 
 
 @app.post("/read-file")
