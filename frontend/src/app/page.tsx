@@ -128,12 +128,6 @@ const Home: FunctionComponent = () => {
             )}
 
             {/* Affichage des résultats */}
-            {results.length > 0 && (
-                <div className="mt-8 w-full max-w-4xl">
-                    <h3 className="text-lg font-semibold mb-4">Résultats de l'analyse</h3>
-                    {results.map((result) => renderResult(result))}
-                </div>
-            )}
 
             <div className="mt-8 w-full max-w-4xl">
     <h3 className="text-lg font-semibold mb-4">Résumé Final de l'analyse</h3>
