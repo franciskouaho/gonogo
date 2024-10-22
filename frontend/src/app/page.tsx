@@ -4,17 +4,21 @@ import { ChangeEvent, FunctionComponent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import api from "@/config/api";
 import ApiResponse from "@/types/api-response";
-import ChatGPTAnalysis from "@/types/chatgpt-analysis";
 
+interface FileResult {
+    filename: string;
+    info: string | object;  // 'info' peut être une chaîne ou un objet JSON
+}
 
 const Home: FunctionComponent = () => {
     const [file, setFile] = useState<File | null>(null);
-    const [results, setResults] = useState<ApiResponse | null>(null);
-    const [chatGPTResponse, setChatGPTResponse] = useState<ChatGPTAnalysis | null>(null);
+    const [results, setResults] = useState<FileResult[]>([]);
+    const [finalResults, setFinalResults] = useState<string>("");
     const [showDownloadButton, setShowDownloadButton] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Mutation pour envoyer le fichier et obtenir les résultats
     const handleFileUpload = useMutation<ApiResponse, Error, void>({
         mutationFn: async () => {
             if (!file) throw new Error("Aucun fichier sélectionné");
@@ -30,8 +34,8 @@ const Home: FunctionComponent = () => {
         },
         onSuccess: (data) => {
             console.log("Réponse complète:", data);
-            setResults(data);
-            setChatGPTResponse(data.chatgpt_analysis);
+            setResults(data.results);
+            setFinalResults(data.final_results);  // Store final result
             setShowDownloadButton(true);
             setIsLoading(false);
         },
@@ -42,6 +46,7 @@ const Home: FunctionComponent = () => {
         }
     });
 
+    // Gérer le changement de fichier
     const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
             setFile(event.target.files[0]);
@@ -49,58 +54,45 @@ const Home: FunctionComponent = () => {
         }
     };
 
+    // Logique de téléchargement (si nécessaire)
     const handleDownload = async () => {
-        if (!results || !results.word_document) return;
-        
-        setIsDownloading(true);
-        try {
-            const response = await api.get(`download-document`, {
-                params: { file_path: results.word_document },
-                responseType: 'blob'
-            });
-
-            const blob = new Blob([response.data], {
-                type: response.headers['content-type']
-            });
-
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = results.word_document.split('/').pop() || 'document';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error("Erreur lors du téléchargement:", error);
-        } finally {
-            setIsDownloading(false);
-        }
+        // Implémente la logique de téléchargement si nécessaire
     };
 
-    const renderSection = (title: string, content: any) => (
-        <div className="mt-4">
-            <h4 className="text-md font-semibold mb-2">{title}</h4>
-            <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
-                {JSON.stringify(content, null, 2)}
-            </pre>
-        </div>
-    );
+    // Affiche les résultats
+    const renderResult = (result: FileResult) => {
+        return (
+            <div key={result.filename} className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
+                <div className="px-4 py-5 sm:px-6">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                        Résultats pour: {result.filename}
+                    </h3>
+                </div>
+                <div className="border-t border-gray-200 px-4 py-5">
+                    {/* Si result.info est un objet, on le transforme en chaîne JSON */}
+                    <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
+                        {typeof result.info === 'object' ? JSON.stringify(result.info, null, 2) : result.info}
+                    </pre>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <section className="flex flex-col items-center justify-center min-h-screen py-12 px-4 sm:px-6 lg:px-8">
             <form className="mb-8">
                 <div className="w-[400px] relative border-2 border-gray-300 border-dashed rounded-lg p-6" id="dropzone">
                     <input type="file" className="absolute inset-0 w-full h-full opacity-0 z-50"
-                           onChange={handleFileChange}/>
+                           onChange={handleFileChange} />
                     <div className="text-center">
                         <img className="mx-auto h-12 w-12" src="https://www.svgrepo.com/show/357902/image-upload.svg"
-                             alt=""/>
+                             alt="Upload" />
                         <h3 className="mt-2 text-sm font-medium text-gray-900">
                             <label htmlFor="file-upload" className="relative cursor-pointer">
                                 <span>Glissez-déposez</span>
                                 <span className="text-indigo-600"> ou parcourez</span>
                                 <span> pour télécharger</span>
-                                <input id="file-upload" name="file-upload" type="file" className="sr-only"/>
+                                <input id="file-upload" name="file-upload" type="file" className="sr-only" />
                             </label>
                         </h3>
                         <p className="mt-1 text-xs text-gray-500">
@@ -125,7 +117,7 @@ const Home: FunctionComponent = () => {
                 {handleFileUpload.isSuccess && <p>Fichier traité avec succès!</p>}
             </div>
 
-            {showDownloadButton && results && results.word_document && (
+            {showDownloadButton && results && (
                 <button
                     onClick={handleDownload}
                     disabled={isDownloading}
@@ -135,46 +127,14 @@ const Home: FunctionComponent = () => {
                 </button>
             )}
 
-            {chatGPTResponse && (
-                <div className="mt-8 w-full max-w-4xl">
-                    <h3 className="text-lg font-semibold mb-4">Résultats de l'analyse</h3>
-                    <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-                        <div className="px-4 py-5 sm:px-6">
-                            <h3 className="text-lg leading-6 font-medium text-gray-900">
-                                Informations générales
-                            </h3>
-                        </div>
-                        <div className="border-t border-gray-200">
-                            <dl>
-                                {(Object.entries(chatGPTResponse) as [keyof ChatGPTAnalysis, any][]).map(([key, value]) => {
-                                    if (typeof value !== 'object') {
-                                        return (
-                                            <div key={key} className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                                <dt className="text-sm font-medium text-gray-500">{key}</dt>
-                                                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{value as string}</dd>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })}
-                            </dl>
-                        </div>
-                    </div>
-                    
-                    {renderSection("Calendrier", chatGPTResponse.Calendrier)}
-                    {renderSection("Critères d'attribution", chatGPTResponse["Critères d'attribution"])}
-                    {renderSection("Description de l'offre", chatGPTResponse["Description de l'offre"])}
-                    {renderSection("Description des prestations", chatGPTResponse["Description des prestations"])}
-                    {renderSection("Exigences", chatGPTResponse.Exigences)}
-                    {renderSection("Missions et compétences attendues", chatGPTResponse["Missions et compétences attendues"])}
-                    {renderSection("Profil des hôtes ou hôtesses d'accueil", chatGPTResponse["Profil des hôtes ou hôtesses d'accueil"])}
-                    {renderSection("Plages horaires", chatGPTResponse["Plages horaires"])}
-                    {renderSection("PSE", chatGPTResponse.PSE)}
-                    {renderSection("Formations", chatGPTResponse.Formations)}
-                    {renderSection("Intérêt pour le groupe", chatGPTResponse["Intérêt pour le groupe"])}
-                    {renderSection("Formule de révision des prix", chatGPTResponse["Formule de révision des prix"])}
-                </div>
-            )}
+            {/* Affichage des résultats */}
+
+            <div className="mt-8 w-full max-w-4xl">
+    <h3 className="text-lg font-semibold mb-4">Résumé Final de l'analyse</h3>
+    <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
+        {finalResults}
+    </pre>
+</div>
         </section>
     );
 };

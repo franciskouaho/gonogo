@@ -26,3 +26,5 @@ pypandoc
 tiktoken
 anthropic
 tiktoken
+pdfplumber
+pdfkit
