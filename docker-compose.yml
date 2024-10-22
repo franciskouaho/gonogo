@@ -8,8 +8,6 @@ services:
     container_name: backend
     ports:
       - "8000:8000"
-    depends_on:
-      - minio
     volumes:
       - .:/backend
     env_file:
