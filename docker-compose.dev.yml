@@ -8,6 +8,9 @@ services:
       - "--providers.docker=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.traefik.address=:8080"
+      - "--entrypoints.web.transport.respondingTimeouts.readTimeout=300s"
+      - "--entrypoints.web.transport.respondingTimeouts.writeTimeout=300s"
+      - "--entrypoints.web.transport.respondingTimeouts.idleTimeout=300s"
       - "--log.level=DEBUG"
       - "--accesslog=true"
     ports:
@@ -35,6 +38,8 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`localhost`)"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.services.backend.loadbalancer.server.timeout.read=300s"
+      - "traefik.http.services.backend.loadbalancer.server.timeout.write=300s"
     networks:
       - jobpilot_network
 
