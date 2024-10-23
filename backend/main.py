@@ -99,7 +99,6 @@ async def analyze_content_with_gpt(client, file_name: str, content: str, variabl
     try:
         for chunk in split_text_into_chunks(content):
             async with semaphore:
-                logger.info(f"Start API call for '{file_name}' at {time.time()}")
                 response = await client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
@@ -109,7 +108,6 @@ async def analyze_content_with_gpt(client, file_name: str, content: str, variabl
                     max_tokens=1000,
                     temperature=0.5
                 )
-                logger.info(f"End API call for '{file_name}' at {time.time()}")
             gpt_summary = response.choices[0].message.content
             results.append(gpt_summary)
 
