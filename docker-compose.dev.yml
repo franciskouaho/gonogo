@@ -28,7 +28,7 @@ services:
     depends_on:
       - minio
     volumes:
-      - .:/backend
+      - ./backend:/backend
     env_file:
       - .env
     labels:
