@@ -28,4 +28,4 @@ EXPOSE 8000
 ENV PYTHONPATH=/backend
 
 # Commande pour exécuter l'application avec uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "300", "--http-timeout", "300"]
