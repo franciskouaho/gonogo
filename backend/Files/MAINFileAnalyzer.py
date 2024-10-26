@@ -1,5 +1,7 @@
 from BaseFileAnalyzer import BaseFileAnalyzer
 from Enums.FileType import FileType
+from Models.RC import RC
+from pydantic import BaseModel
 
 class MAINFileAnalyzer(BaseFileAnalyzer):
     def __init__(self):
@@ -81,6 +83,10 @@ class MAINFileAnalyzer(BaseFileAnalyzer):
                 "Explication des termes : Extrais l'explication de chaque variable mentionnée dans la formule (par exemple, P, Po, I0-4, Im-4), en décrivant leur rôle et leur signification dans le calcul."
                 "Ne résume pas les informations : Copie chaque terme et sa description exactement comme ils apparaissent dans le texte."
                 "Ne captures que ce qui est lié à la formule de révision des prix, en ignorant les autres sections du document non pertinentes pour ce calcul."
+
         )
+
+    def get_response_model(self) -> BaseModel:
+     return RC
 
 

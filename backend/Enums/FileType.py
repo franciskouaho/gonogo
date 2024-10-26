@@ -6,3 +6,4 @@ class FileType(Enum):
     CCTP = "cctp"
     BPU = "bpu"
     MAIN = "main"
+    MAIN2 = "main2"
