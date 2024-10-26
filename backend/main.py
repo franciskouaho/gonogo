@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from file_extraction import extract_files_from_zip,extract_text_from_file, read_zip_file
-from analyze import analyze_processed_files, analyze_final_file,print_file
+from analyze import analyze_processed_files,print_file
 from Enums.FileType import FileType
 from FileAnalyzerRegistry import FileAnalyzerRegistry
 from BaseFileAnalyzer import BaseFileAnalyzer
