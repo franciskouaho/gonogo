@@ -4,10 +4,11 @@ import { ChangeEvent, FunctionComponent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import api from "@/config/api";
 import ApiResponse from "@/types/api-response";
+import jsPDF from 'jspdf';
 
 interface FileResult {
     filename: string;
-    info: string | object;  // 'info' peut être une chaîne ou un objet JSON
+    info: string | object;
 }
 
 const Home: FunctionComponent = () => {
@@ -18,7 +19,6 @@ const Home: FunctionComponent = () => {
     const [isDownloading, setIsDownloading] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Mutation pour envoyer le fichier et obtenir les résultats
     const handleFileUpload = useMutation<ApiResponse, Error, void>({
         mutationFn: async () => {
             if (!file) throw new Error("Aucun fichier sélectionné");
@@ -35,7 +35,7 @@ const Home: FunctionComponent = () => {
         onSuccess: (data) => {
             console.log("Réponse complète:", data);
             setResults(data.results);
-            setFinalResults(data.final_results);  // Store final result
+            setFinalResults(data.final_results);
             setShowDownloadButton(true);
             setIsLoading(false);
         },
@@ -46,7 +46,6 @@ const Home: FunctionComponent = () => {
         }
     });
 
-    // Gérer le changement de fichier
     const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
             setFile(event.target.files[0]);
@@ -54,12 +53,29 @@ const Home: FunctionComponent = () => {
         }
     };
 
-    // Logique de téléchargement (si nécessaire)
-    const handleDownload = async () => {
-        // Implémente la logique de téléchargement si nécessaire
-    };
+const handleDownloadPDF = () => {
+    const doc = new jsPDF();
 
-    // Affiche les résultats
+    doc.setFontSize(16);
+    doc.text("Résumé Final de l'analyse", 10, 10);
+
+    const pageHeight = doc.internal.pageSize.height;
+    const lines = doc.splitTextToSize(finalResults, 180);
+    let y = 20;
+
+    lines.forEach((line) => {
+        if (y + 10 > pageHeight) {
+            doc.addPage();
+            y = 10;
+        }
+        doc.text(line, 10, y);
+        y += 10;
+    });
+
+    doc.save("resultfinal.pdf");
+};
+
+
     const renderResult = (result: FileResult) => {
         return (
             <div key={result.filename} className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
@@ -69,7 +85,6 @@ const Home: FunctionComponent = () => {
                     </h3>
                 </div>
                 <div className="border-t border-gray-200 px-4 py-5">
-                    {/* Si result.info est un objet, on le transforme en chaîne JSON */}
                     <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
                         {typeof result.info === 'object' ? JSON.stringify(result.info, null, 2) : result.info}
                     </pre>
@@ -119,22 +134,20 @@ const Home: FunctionComponent = () => {
 
             {showDownloadButton && results && (
                 <button
-                    onClick={handleDownload}
+                    onClick={handleDownloadPDF}
                     disabled={isDownloading}
                     className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
                 >
-                    {isDownloading ? 'Téléchargement en cours...' : 'Télécharger l\'analyse'}
+                    {isDownloading ? 'Téléchargement en cours...' : 'Télécharger le résumé en PDF'}
                 </button>
             )}
 
-            {/* Affichage des résultats */}
-
             <div className="mt-8 w-full max-w-4xl">
-    <h3 className="text-lg font-semibold mb-4">Résumé Final de l'analyse</h3>
-    <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
-        {finalResults}
-    </pre>
-</div>
+                <h3 className="text-lg font-semibold mb-4">Résumé Final de l'analyse</h3>
+                <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
+                    {finalResults}
+                </pre>
+            </div>
         </section>
     );
 };
