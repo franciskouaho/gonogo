@@ -21,13 +21,11 @@ class FileAnalyzerRegistry:
 
     @classmethod
     def get_analyzer(cls, file_name: str) -> BaseFileAnalyzer:
-        # Identifier le type de fichier en utilisant l'enum
         file_name_lower = file_name.lower()
-        for file_type in FileType:
-            if file_type.value in file_name_lower:
-                if file_type in cls._instances:
-                    return cls._instances[file_type]
 
+        for file_type, analyzer in cls._instances.items():
+            if any(alias in file_name_lower for alias in file_type.value):
+                return analyzer
         return None
 
     @classmethod

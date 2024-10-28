@@ -3,8 +3,7 @@ import asyncio
 import os
 from io import BytesIO
 from openai import AsyncOpenAI
-
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile,HTTPException,BackgroundTasks,WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from file_extraction import extract_files_from_zip,extract_text_from_file, read_zip_file
@@ -12,6 +11,7 @@ from analyze import analyze_processed_files,print_file
 from Enums.FileType import FileType
 from FileAnalyzerRegistry import FileAnalyzerRegistry
 from BaseFileAnalyzer import BaseFileAnalyzer
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +32,67 @@ load_dotenv()
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 FileAnalyzerRegistry.initialize_registry()
 
+
+@app.websocket("/ws/timer")
+async def websocket_timer(websocket: WebSocket, duration: int = 120):
+    await websocket.accept()
+    try:
+        for i in range(duration):
+            await websocket.send_text(f"Temps écoulé : {i + 1} secondes")
+            await asyncio.sleep(1)
+        await websocket.send_text("Tâche terminée")
+    finally:
+        await websocket.close()
+
+@app.get("/long-request")
+async def long_request():
+    try:
+        # Temporisation pour tester la durée maximale de requête HTTP (2 minutes)
+        await asyncio.sleep(120)  # 120 secondes = 2 minutes
+        return {"message": "La requête a été traitée avec succès après 2 minutes."}
+    except Exception as e:
+        # Gestion des erreurs si le serveur dépasse le délai limite
+        raise HTTPException(status_code=500, detail=f"Erreur : {str(e)}")
+
+
+def long_running_task(duration: int):
+    asyncio.run(asyncio.sleep(duration))
+    print("Tâche de longue durée terminée.")
+
+@app.get("/background-request")
+async def background_request(background_tasks: BackgroundTasks, duration: int = 120):
+    if duration > 300:
+        raise HTTPException(status_code=400, detail="La durée ne peut pas dépasser 5 minutes.")
+    background_tasks.add_task(long_running_task, duration)
+    return {"message": "Tâche de longue durée en cours d'exécution en arrière-plan."}
 @app.post("/read-file")
 async def match(zip_file: UploadFile = File(...)):
+    file_size = await zip_file.read()
+    if len(file_size) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400, detail="Le fichier dépasse la taille maximale autorisée de 10 Mo."
+        )
+    await zip_file.seek(0)  # Réinitialise la lecture du fichier
+
+    # Vérification 2: Limite de requêtes par semaine
+    try:
+        RequestLimiter.check_and_increment()
+    except HTTPException as e:
+        logger.warning(f"Trop de requêtes: {e.detail}")
+        raise e
+
+    # Vérification 3: Lire le contenu du fichier ZIP
+    try:
+        zip_content = await read_zip_file(zip_file)
+    except Exception as e:
+        logger.error(f"Erreur lors de la lecture du fichier ZIP: {str(e)}")
+        raise HTTPException(
+            status_code=400, detail="Le fichier fourni n'est pas un fichier ZIP valide."
+        )
+
     logger.info(f"Received file: {zip_file.filename}")
 
     # Lire le contenu du fichier ZIP
-    zip_content = await read_zip_file(zip_file)
     processed_files, missing_info_files, unrecognized_files = extract_files_from_zip(zip_content)
 
     final_results = await analyze_processed_files(client,processed_files)
@@ -50,6 +105,25 @@ async def match(zip_file: UploadFile = File(...)):
 
 
 
+
+class RequestLimiter:
+    weekly_limit = 50
+    current_week_count = 0
+    last_reset = datetime.utcnow()
+
+    @staticmethod
+    def check_and_increment():
+        # Vérifie si la semaine est terminée pour réinitialiser le compteur
+        if datetime.utcnow() - RequestLimiter.last_reset > timedelta(weeks=1):
+            RequestLimiter.current_week_count = 0
+            RequestLimiter.last_reset = datetime.utcnow()
+        # Incrémente le compteur si le nombre de requêtes est inférieur à la limite
+        if RequestLimiter.current_week_count < RequestLimiter.weekly_limit:
+            RequestLimiter.current_week_count += 1
+        else:
+            raise HTTPException(
+                status_code=429, detail="Limite de requêtes hebdomadaire atteinte."
+            )
 
 def test ():
 
