@@ -4,4 +4,5 @@ class BPU(BaseModel):
     nombre_agents: list[int] 
     nombre_cdi: list[int] 
     nombre_cdd: list[int] 
-    autres_details: list[str] 
+    autres_details: list[str]
+    livrables_attendus : list[str]
