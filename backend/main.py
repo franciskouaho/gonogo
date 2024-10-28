@@ -96,7 +96,8 @@ async def match(zip_file: UploadFile = File(...)):
     processed_files, missing_info_files, unrecognized_files = extract_files_from_zip(zip_content)
 
     final_results = await analyze_processed_files(client,processed_files)
-
+    print("final_results")
+    print(final_results)
     final_results = print_file(final_results)
     return {
         "results": final_results,

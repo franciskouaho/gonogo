@@ -16,6 +16,12 @@ class CCAPFileAnalyzer(BaseFileAnalyzer):
             révisions de prix, conditions de paiement, pénalités, qualité, "
             formule de révision commençant par P = , prenez-la exactement comme c'est écrit et donnez les définitions si elles sont présentes dans le document, 
             RSE, clause de réexamen pour modifications d'équipement.
+            - Livrables attendus ( tu dois recherhcer tout type de livrable attendu mentionné)
+            - points_attention ( trouve tous les points d'attentions
+            - RFA  (Remise de Fin d’Année) 
+            - budget ou CA
+            Trouve le Résume l'objet de la consultation => objet_consultation
+            
             Ne remplacez jamais les informations existantes par une valeur vide.
             """
         )

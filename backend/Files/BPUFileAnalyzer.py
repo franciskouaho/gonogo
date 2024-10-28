@@ -11,6 +11,7 @@ class BPUFileAnalyzer(BaseFileAnalyzer):
         return ("""
             Veuillez extraire les informations suivantes de ce contenu :
             Nombre d'agents, CDI, CDD, et tous autres détails sur le personnel.
+            - Livrables attendus ( tu dois recherhcer tout type de livrable attendu mentionné)
             Ne remplacez jamais les informations existantes par une valeur vide.
             """
         )

@@ -143,7 +143,7 @@ const handleDownloadPDF = () => {
             )}
 
             <div className="mt-8 w-full max-w-4xl">
-                <h3 className="text-lg font-semibold mb-4">Résumé Final de l'analyse</h3>
+                <h3 className="text-lg font-semibold mb-4">Résumé Go NoGo</h3>
                 <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
                     {finalResults}
                 </pre>

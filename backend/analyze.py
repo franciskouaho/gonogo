@@ -25,6 +25,7 @@ async def analyze_processed_files(client,processed_files):
                 tasks.append(task)
 
     results_list = await asyncio.gather(*tasks)
+    # results_list = test_values_from_files()
     result_list = merge_results(results_list)
 
     return result_list
@@ -65,60 +66,84 @@ async def analyze_content_with_gpt(client, file_name: str, content: str):
         return {"filename": file_name, "info": "Error during GPT analysis."}
 
 
-
 def format_liste(valeur):
+    """Formate une liste en une chaîne avec des puces. Retourne une chaîne vide si la liste est vide
+    ou contient des termes tels que 'non spécifié', 'non spécifiée', 'non précisé', 'non précisée'."""
+
+    # Vérifier si la valeur est une liste
     if isinstance(valeur, list):
-        return "\n        • " + "\n        • ".join(map(str, valeur)) if valeur else "Non spécifié"
-    return str(valeur) if valeur else "Non spécifié"
+        valeur_filtre = []
+        for v in valeur:
+            if isinstance(v, str):
+                v_minuscule = v.lower()
+                if v_minuscule == "non spécifié" or v_minuscule == "date non spécifiée" or v_minuscule == "non spécifiée" or v_minuscule == "non précisé" or v_minuscule == "non précisée":
+                    continue
+            valeur_filtre.append(v)
+        return "\n        • " + "\n        • ".join(map(str, valeur_filtre)) if valeur_filtre else ""
+
+    if isinstance(valeur, str):
+        valeur_minuscule = valeur.lower()
+        if valeur_minuscule == "non spécifié" or valeur_minuscule == "non spécifiée" or valeur_minuscule == "non précisé" or valeur_minuscule == "non précisée":
+            return ""
+        return valeur
+
+    return str(valeur) if valeur else ""
+
 
 def print_file(dico):
-    return (
-        f"""
-    1. CONTEXTE ET ATTENTES
-        Objet du marché : {format_liste(dico.get('prix_marche'))}
-        Périmètre géographique : {format_liste(dico.get('perimetre_geographique'))}
-        Horaires d’ouverture du site : {format_liste(dico.get('horaires_ouverture'))}
-        Nombre de lot(s) : {format_liste(dico.get('nombre_agents'))}
-        Budget ou chiffre d’affaires : {format_liste(dico.get('budget'))}
-        Calendrier et dates clés : {format_liste(dico.get('calendrier'))}
-        Date limite de remise des offres : {format_liste(dico.get('date_limite_remise_offres'))}
-        Date de remise des offres : {format_liste(dico.get('date_remise_offres'))}
-        Date de démarrage du marché : {format_liste(dico.get('date_demarrage'))}
-        Durée du marché : {format_liste(dico.get('duree_marche'))}
-        Date de visite de site : {format_liste(dico.get('date_visite'))}
-        Autres dates importantes : {format_liste(dico.get('autres_dates_importantes'))}
-        Critères d’attribution : {format_liste(dico.get('criteres_attribution'))}
-        Missions et/ou prestations attendues : {format_liste(dico.get('prestations_attendues'))}
+    """Génère une chaîne représentant les données de manière conditionnelle sans afficher les valeurs vides ou 'Non spécifié'."""
+    sections = [
+        ("1. CONTEXTE ET ATTENTES", [
+            ("Objet du marché", dico.get('titre')),
+            ("Périmètre géographique", dico.get('perimetre_geographique')),
+            ("Horaires d’ouverture du site", dico.get('horaires_ouverture')),
+            ("Nombre de lot(s)", dico.get('nombre_agents')),
+            ("Budget ou chiffre d’affaires", dico.get('prix_marche')),
+            ("Calendrier et dates clés", dico.get('calendrier_dates_cles')),
+            ("Missions et/ou prestations attendues", dico.get('prestations_attendues'))
+        ]),
+        ("2. RISQUES D’EXPLOITATION - Démarrage", [
+            ("Profils requis", dico.get('profils_requis')),
+            ("Livrables attendus", dico.get('livrables_attendus'))
+        ]),
+        ("2. RISQUES D’EXPLOITATION - Exploitation courante", [
+            ("Délai et conditions de remplacement des profils", dico.get('condition_delai_remplacement')),
+            ("Gestion des absences", dico.get('gestion_absences')),
+            ("Formations attendues", dico.get('formations')),
+            ("Matériel mis à disposition", dico.get('equipements_a_fournir')),
+            ("Tenues vestimentaires requises", dico.get('tenues')),
+            ("Reprise de personnel", dico.get('reprise_personnel')),
+            ("Présence d’un chef d’équipe/responsable de site", dico.get('composition_equipes')),
+            ("Note sociale", dico.get('note_sociale'))
+        ]),
+        ("3. RISQUES CDC", [
+            ("Points d’attention", dico.get('points_attention')),
+            ("Pénalités", dico.get('penalites'))
+        ]),
+        ("4. CADRE CONTRACTUEL", [
+            ("Révision des prix", dico.get('revisions_prix')),
+            ("Pénalités", dico.get('penalites')),
+            ("Système de RFA (Remise de Fin d’Année)", dico.get('rfa_systeme')),
+            ("Délai de paiement", dico.get('conditions_paiement'))
+        ]),
+        ("5. FORMULE DE RÉVISION DES PRIX", [
+            ("Formule attendue", dico.get('formule_revision')),
+            ("Explication des termes", dico.get('definitions_formule'))
+        ])
+    ]
 
-    2. RISQUES D’EXPLOITATION
-        Démarrage :
-            Profils requis : {format_liste(dico.get('profils_requis'))}
-            Livrables attendus : {format_liste(dico.get('livrables_attendus'))}
-            Formations spécifiques : {format_liste(dico.get('formations'))}
-        Exploitation courante :
-            Délai de remplacement des profils : {format_liste(dico.get('delai_remplacement'))}
-            Gestion des absences : {format_liste(dico.get('gestion_absences'))}
-            Formations attendues : {format_liste(dico.get('formations'))}
-            Matériel mis à disposition : {format_liste(dico.get('equipements_a_fournir'))}
-            Tenues vestimentaires requises : {format_liste(dico.get('tenues'))}
-            Reprise de personnel : {format_liste(dico.get('reprise_personnel'))}
-            Présence d’un chef d’équipe/responsable de site : {format_liste(dico.get('composition_equipes'))}
+    # Construire le texte en ne gardant que les sections non vides
+    output = []
+    for section_title, fields in sections:
+        field_texts = [
+            f"    **{field}** : {format_liste(value)}"
+            for field, value in fields
+            if format_liste(value)  # Exclure les champs vides
+        ]
+        if field_texts:
+            output.append(f"{section_title}\n" + "\n".join(field_texts))
 
-    3. RISQUES CDC
-        Points d’attention : {format_liste(dico.get('points_attention'))}
-        Pénalités : {format_liste(dico.get('penalites'))}
-
-    4. CADRE CONTRACTUEL
-        Révision des prix : {format_liste(dico.get('revisions_prix'))}
-        Pénalités : {format_liste(dico.get('penalites'))}
-        Système de RFA (Remise de Fin d’Année) : {format_liste(dico.get('rfa_systeme'))}
-        Délai de paiement : {format_liste(dico.get('conditions_paiement'))}
-
-    5. FORMULE DE RÉVISION DES PRIX
-        Formule attendue : {format_liste(dico.get('formule_revision'))}
-        Explication des termes : {format_liste(dico.get('definitions_formule'))}
-        """
-    )
+    return "\n\n".join(output)
 
 
 def split_text_into_chunks(text, max_tokens=1500):
@@ -138,8 +163,6 @@ def test_values_from_files():
 def merge_results(results_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     result = {}
     for item in results_list:
-
-        # Parcourir chaque dictionnaire dans la liste 'info'
         info_entries = item.get('info', [])
         if isinstance(info_entries, str):
             continue  # Passer cette itération si 'info' est une chaîne
@@ -147,13 +170,24 @@ def merge_results(results_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         for info_dict in info_entries:
             for key, value in info_dict.items():
                 if key not in result:
-                    result[key] = []
+                    result[key] = set()  # Utilisation d'un set pour stocker des valeurs uniques
 
-                if 'non spécifié' in value:
+                if isinstance(value, str) and 'non spécifié' in value.lower():
                     continue
 
                 if value:
-                    result[key].extend(value if isinstance(value, list) else [value])
-    print(result)
-    return result
+                    result[key].update(value if isinstance(value, list) else [value])
 
+    # Convertir les sets en listes pour le retour
+    return {k: list(v) for k, v in result.items()}
+
+
+# """
+#         Date limite de remise des offres : {format_liste(dico.get('date_limite_remise_offres'))}
+#         Date de remise des offres : {format_liste(dico.get('date_remise_offres'))}
+#         Date de démarrage du marché : {format_liste(dico.get('date_demarrage'))}
+#         Durée du marché : {format_liste(dico.get('duree_marche'))}
+#         Date de visite de site : {format_liste(dico.get('date_visite'))}
+#   Autres dates importantes : {format_liste(dico.get('autres_dates_importantes'))}
+#         Critères d’attribution : {format_liste(dico.get('criteres_attribution'))}
+# """

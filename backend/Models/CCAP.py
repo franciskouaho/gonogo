@@ -15,4 +15,9 @@ class CCAP(BaseModel):
     formule_revision: list[str]   # Formule de révision exacte commençant par "P ="
     definitions_formule: list[str]   # Définitions liées à la formule si présentes
     rse: list[str] 
-    clause_reexamen_modifications: list[str] 
+    clause_reexamen_modifications: list[str]
+    livrables_attendus : list[str]
+    points_attention : list[str]
+    rfa_systeme : list[str]
+    budget_ou_CA : list[str]
+    formations : list[str]
